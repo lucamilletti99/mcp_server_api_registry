@@ -89,12 +89,12 @@ class MCPProxy:
     # Store databricks_host for OAuth token retrieval
     self.databricks_host = databricks_host
 
-    # Ensure URL ends with /mcp/ for the MCP endpoint
-    if not url.endswith('/mcp/'):
+    # Ensure URL ends with /mcp for the MCP endpoint (no trailing slash)
+    if not url.endswith('/mcp'):
       if url.endswith('/'):
-        url = url + 'mcp/'
+        url = url + 'mcp'
       else:
-        url = url + '/mcp/'
+        url = url + '/mcp'
     self.app_url = url
 
     self.session_id = None
