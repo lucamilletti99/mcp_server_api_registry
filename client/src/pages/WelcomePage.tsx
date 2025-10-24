@@ -28,10 +28,37 @@ interface UserInfo {
   emails: string[];
 }
 
+interface HealthCheckInfo {
+  status: string;
+  service: string;
+  databricks_configured: boolean;
+  auth_mode: "on-behalf-of" | "service-principal";
+  user_auth_available: boolean;
+  user_token_preview: string | null;
+  authenticated_user: {
+    username?: string;
+    display_name?: string;
+    active?: boolean;
+    error?: string;
+  } | null;
+  headers_present: string[];
+}
+
 async function fetchUserInfo(): Promise<UserInfo> {
   const response = await fetch("/api/user/me");
   if (!response.ok) {
     throw new Error("Failed to fetch user info");
+  }
+  return response.json();
+}
+
+async function fetchHealthCheck(): Promise<HealthCheckInfo> {
+  // Note: This would need a proper API endpoint or MCP call to fetch health check
+  // For now, returning a placeholder structure
+  // You would typically add an API endpoint like /api/health that internally calls the MCP health tool
+  const response = await fetch("/api/health");
+  if (!response.ok) {
+    throw new Error("Failed to fetch health check");
   }
   return response.json();
 }
@@ -47,6 +74,13 @@ export function WelcomePage() {
     queryKey: ["mcpInfo"],
     queryFn: () => McpService.getMcpInfoApiMcpInfoInfoGet(),
     retry: false,
+  });
+
+  const { data: healthCheck } = useQuery({
+    queryKey: ["healthCheck"],
+    queryFn: fetchHealthCheck,
+    retry: false,
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   return (
@@ -89,6 +123,67 @@ export function WelcomePage() {
                   {userInfo.active ? "Active" : "Inactive"}
                 </Badge>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Authentication Status Card */}
+        {healthCheck && (
+          <Card className="mb-8 border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Authentication Status
+              </CardTitle>
+              <CardDescription>
+                On-behalf-of (OBO) authentication information
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Authentication Mode:</span>
+                <Badge variant={healthCheck.auth_mode === "on-behalf-of" ? "default" : "secondary"}>
+                  {healthCheck.auth_mode === "on-behalf-of" ? "🔐 On-Behalf-Of" : "🤖 Service Principal"}
+                </Badge>
+              </div>
+
+              {healthCheck.authenticated_user && (
+                <div className="space-y-2 pt-2 border-t">
+                  <h4 className="text-sm font-semibold">Authenticated As:</h4>
+                  <div className="ml-2 space-y-1">
+                    <p className="text-sm">
+                      <span className="font-medium">Username:</span> {healthCheck.authenticated_user.username}
+                    </p>
+                    <p className="text-sm">
+                      <span className="font-medium">Display Name:</span> {healthCheck.authenticated_user.display_name}
+                    </p>
+                    <p className="text-sm">
+                      <span className="font-medium">Status:</span>{" "}
+                      <Badge variant={healthCheck.authenticated_user.active ? "default" : "secondary"} className="text-xs">
+                        {healthCheck.authenticated_user.active ? "Active" : "Inactive"}
+                      </Badge>
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {healthCheck.user_token_preview && (
+                <div className="space-y-1 pt-2 border-t">
+                  <h4 className="text-sm font-semibold">User Token Preview:</h4>
+                  <code className="block bg-muted px-2 py-1 rounded text-xs font-mono">
+                    {healthCheck.user_token_preview}
+                  </code>
+                </div>
+              )}
+
+              {!healthCheck.user_auth_available && (
+                <div className="pt-2 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    ℹ️ On-behalf-of authentication is not active. The app is using service principal credentials.
+                    To enable OBO auth, access this app through your browser while authenticated to Databricks.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
