@@ -5,9 +5,8 @@ source_code_path: "."
 # Configure on-behalf-of user authorization
 # This allows the app to act with the identity of the authenticated user
 scopes:
-  - "SQL"           # Execute SQL queries on behalf of user
-  - "WAREHOUSES"    # List and access SQL warehouses
-  - "DBFS"          # Access DBFS files and directories
+  - "sql"          # SQL warehouses and query execution
+  - "files.files"  # DBFS files and directories
 
 environment:
   - name: DATABRICKS_HOST
