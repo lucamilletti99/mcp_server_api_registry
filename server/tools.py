@@ -3,7 +3,7 @@
 import os
 
 from databricks.sdk import WorkspaceClient
-from fastmcp import get_http_headers
+from fastmcp.server.dependencies import get_http_headers
 
 
 def get_workspace_client() -> WorkspaceClient:
