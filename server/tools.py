@@ -3,6 +3,31 @@
 import os
 
 from databricks.sdk import WorkspaceClient
+from fastmcp import get_http_headers
+
+
+def get_workspace_client() -> WorkspaceClient:
+  """Get a WorkspaceClient with on-behalf-of user authentication.
+
+  Falls back to service principal authentication if user token is not available.
+
+  Returns:
+      WorkspaceClient configured with appropriate authentication
+  """
+  host = os.environ.get('DATABRICKS_HOST')
+
+  # Try to get user token from request headers (on-behalf-of authentication)
+  headers = get_http_headers()
+  user_token = headers.get('x-forwarded-access-token')
+
+  if user_token:
+    # Use on-behalf-of authentication with user's token
+    print(f'🔐 Using on-behalf-of authentication (user token)')
+    return WorkspaceClient(host=host, token=user_token)
+  else:
+    # Fall back to service principal authentication
+    print(f'🔐 Using service principal authentication (fallback)')
+    return WorkspaceClient(host=host, token=os.environ.get('DATABRICKS_TOKEN'))
 
 
 def load_tools(mcp_server):
@@ -15,10 +40,15 @@ def load_tools(mcp_server):
   @mcp_server.tool
   def health() -> dict:
     """Check the health of the MCP server and Databricks connection."""
+    headers = get_http_headers()
+    user_token_present = bool(headers.get('x-forwarded-access-token'))
+
     return {
       'status': 'healthy',
       'service': 'databricks-mcp',
       'databricks_configured': bool(os.environ.get('DATABRICKS_HOST')),
+      'user_auth_available': user_token_present,
+      'auth_mode': 'on-behalf-of' if user_token_present else 'service-principal',
     }
 
   @mcp_server.tool
@@ -42,10 +72,8 @@ def load_tools(mcp_server):
         Dictionary with query results or error message
     """
     try:
-      # Initialize Databricks SDK
-      w = WorkspaceClient(
-        host=os.environ.get('DATABRICKS_HOST'), token=os.environ.get('DATABRICKS_TOKEN')
-      )
+      # Initialize Databricks SDK with on-behalf-of authentication
+      w = get_workspace_client()
 
       # Get warehouse ID from parameter or environment
       warehouse_id = warehouse_id or os.environ.get('DATABRICKS_SQL_WAREHOUSE_ID')
@@ -100,10 +128,8 @@ def load_tools(mcp_server):
         Dictionary containing list of warehouses with their details
     """
     try:
-      # Initialize Databricks SDK
-      w = WorkspaceClient(
-        host=os.environ.get('DATABRICKS_HOST'), token=os.environ.get('DATABRICKS_TOKEN')
-      )
+      # Initialize Databricks SDK with on-behalf-of authentication
+      w = get_workspace_client()
 
       # List SQL warehouses
       warehouses = []
@@ -144,10 +170,8 @@ def load_tools(mcp_server):
         Dictionary with file listings or error message
     """
     try:
-      # Initialize Databricks SDK
-      w = WorkspaceClient(
-        host=os.environ.get('DATABRICKS_HOST'), token=os.environ.get('DATABRICKS_TOKEN')
-      )
+      # Initialize Databricks SDK with on-behalf-of authentication
+      w = get_workspace_client()
 
       # List files in DBFS
       files = []
