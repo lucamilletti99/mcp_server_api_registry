@@ -184,21 +184,18 @@ def load_tools(mcp_server):
         - API configurations and metadata
         - Current status of each endpoint
     """
-    # Fixed query for the API registry table
+    # Fixed query for the API registry table (fully-qualified table name)
     query = 'SELECT * FROM luca_milletti.custom_mcp_server.api_registry'
 
-    # Use the catalog and schema explicitly
-    catalog = 'luca_milletti'
-    schema = 'custom_mcp_server'
-
-    # Execute the query using the helper function
-    result = _execute_sql_query(query, warehouse_id, catalog, schema, limit)
+    # Don't pass catalog/schema since we're using fully-qualified table name
+    # Passing them would prepend USE CATALOG/USE SCHEMA which interferes with results
+    result = _execute_sql_query(query, warehouse_id, catalog=None, schema=None, limit=limit)
 
     # Add context to the result
     if result.get('success'):
       result['registry_info'] = {
-        'catalog': catalog,
-        'schema': schema,
+        'catalog': 'luca_milletti',
+        'schema': 'custom_mcp_server',
         'table': 'api_registry',
         'description': 'Databricks API Registry containing all available API endpoints',
       }
