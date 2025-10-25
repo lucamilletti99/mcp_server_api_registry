@@ -24,8 +24,9 @@ def get_workspace_client() -> WorkspaceClient:
   if user_token:
     # Use on-behalf-of authentication with user's token
     # Create Config with ONLY token auth to avoid OAuth conflict
+    # auth_type='pat' forces token-only auth and disables auto-detection
     print(f'🔐 Using on-behalf-of authentication (user token)')
-    config = Config(host=host, token=user_token)
+    config = Config(host=host, token=user_token, auth_type='pat')
     return WorkspaceClient(config=config)
   else:
     # Fall back to OAuth service principal authentication
@@ -55,7 +56,8 @@ def load_tools(mcp_server):
       try:
         # Use user's token for on-behalf-of authentication
         # Create Config with ONLY token auth to avoid OAuth conflict
-        config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
+        # auth_type='pat' forces token-only auth and disables auto-detection
+        config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token, auth_type='pat')
         w = WorkspaceClient(config=config)
         current_user = w.current_user.me()
         user_info = {

@@ -34,7 +34,8 @@ async def get_health(request: Request) -> Dict[str, Any]:
     try:
       # Use user's token for on-behalf-of authentication
       # Create Config with ONLY token auth to avoid OAuth conflict
-      config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
+      # auth_type='pat' forces token-only auth and disables auto-detection
+      config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token, auth_type='pat')
       w = WorkspaceClient(config=config)
       current_user = w.current_user.me()
       user_info = {
