@@ -3,6 +3,7 @@
 import os
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.core import Config
 from fastmcp.server.dependencies import get_http_headers
 
 
@@ -22,8 +23,10 @@ def get_workspace_client() -> WorkspaceClient:
 
   if user_token:
     # Use on-behalf-of authentication with user's token
+    # Create Config with ONLY token auth to avoid OAuth conflict
     print(f'🔐 Using on-behalf-of authentication (user token)')
-    return WorkspaceClient(host=host, token=user_token)
+    config = Config(host=host, token=user_token)
+    return WorkspaceClient(config=config)
   else:
     # Fall back to OAuth service principal authentication
     # WorkspaceClient will automatically use DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET
@@ -50,7 +53,10 @@ def load_tools(mcp_server):
     user_info = None
     if user_token_present:
       try:
-        w = WorkspaceClient(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
+        # Use user's token for on-behalf-of authentication
+        # Create Config with ONLY token auth to avoid OAuth conflict
+        config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
+        w = WorkspaceClient(config=config)
         current_user = w.current_user.me()
         user_info = {
           'username': current_user.user_name,

@@ -4,6 +4,7 @@ import os
 from typing import Any, Dict
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.core import Config
 from fastapi import APIRouter, Request
 from fastmcp.server.dependencies import get_http_headers
 
@@ -32,7 +33,9 @@ async def get_health(request: Request) -> Dict[str, Any]:
   if user_token_present:
     try:
       # Use user's token for on-behalf-of authentication
-      w = WorkspaceClient(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
+      # Create Config with ONLY token auth to avoid OAuth conflict
+      config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
+      w = WorkspaceClient(config=config)
       current_user = w.current_user.me()
       user_info = {
         'username': current_user.user_name,
