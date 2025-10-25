@@ -6,7 +6,6 @@ from typing import Any, Dict, List
 
 import httpx
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.core import Config
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -14,12 +13,15 @@ router = APIRouter()
 
 
 def get_workspace_client() -> WorkspaceClient:
-    """Get authenticated Databricks workspace client."""
-    config = Config(
-        host=os.environ.get('DATABRICKS_HOST'),
-        token=os.environ.get('DATABRICKS_TOKEN'),
-    )
-    return WorkspaceClient(config=config)
+    """Get authenticated Databricks workspace client.
+
+    The SDK will automatically detect credentials from:
+    - Environment variables (DATABRICKS_HOST, DATABRICKS_TOKEN)
+    - Databricks Apps runtime environment
+    - Default profile from ~/.databrickscfg
+    """
+    # Let the SDK auto-detect credentials
+    return WorkspaceClient()
 
 
 class ChatMessage(BaseModel):
@@ -300,9 +302,15 @@ async def send_chat_message(request: ChatRequest) -> ChatResponse:
         # Foundation Models are accessed through the /serving-endpoints API
         endpoint_name = request.model
 
-        # Use httpx to call the serving endpoint directly
-        base_url = os.environ.get('DATABRICKS_HOST', '').rstrip('/')
-        token = os.environ.get('DATABRICKS_TOKEN', '')
+        # Get base URL and token from workspace client config
+        base_url = w.config.host.rstrip('/')
+        token = w.config.token
+
+        if not base_url or not token:
+            raise HTTPException(
+                status_code=500,
+                detail='Databricks workspace configuration is missing. Please check DATABRICKS_HOST and DATABRICKS_TOKEN environment variables.',
+            )
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
