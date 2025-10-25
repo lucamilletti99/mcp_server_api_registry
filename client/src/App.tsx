@@ -1,9 +1,92 @@
+import { useState } from "react";
+import { ChatPage } from "./pages/ChatPage";
 import { PromptsPage } from "./pages/PromptsPage";
+import { MessageSquare, FileCode, Moon, Sun } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useTheme } from "./components/theme-provider";
 
 function App() {
+  const [activeTab, setActiveTab] = useState("chat");
+  const { theme, setTheme } = useTheme();
+
+  const isDark = theme === "dark";
+
   return (
-    <div className="min-h-screen bg-background">
-      <PromptsPage />
+    <div className={`h-screen flex flex-col ${isDark ? "bg-[#0a1929]" : "bg-gray-50"}`}>
+      {/* Universal Top Banner */}
+      <div className={`flex items-center justify-between px-6 py-3 ${
+        isDark ? "bg-[#0d1f2d]" : "bg-white"
+      } border-b ${isDark ? "border-white/10" : "border-gray-200"}`}>
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setActiveTab("chat")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              activeTab === "chat"
+                ? isDark
+                  ? "bg-white/10 text-white"
+                  : "bg-gray-100 text-gray-900"
+                : isDark
+                ? "text-white/60 hover:text-white/80 hover:bg-white/5"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <MessageSquare className="h-4 w-4" />
+            Chat Playground
+          </button>
+          <button
+            onClick={() => setActiveTab("mcp-info")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              activeTab === "mcp-info"
+                ? isDark
+                  ? "bg-white/10 text-white"
+                  : "bg-gray-100 text-gray-900"
+                : isDark
+                ? "text-white/60 hover:text-white/80 hover:bg-white/5"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <FileCode className="h-4 w-4" />
+            MCP Info
+          </button>
+        </div>
+
+        {/* Theme Selector */}
+        <Select value={theme} onValueChange={setTheme}>
+          <SelectTrigger className={`w-[140px] ${
+            isDark
+              ? "bg-white/5 border-white/10 text-white hover:bg-white/10"
+              : "bg-gray-50 border-gray-300 text-gray-900 hover:bg-gray-100"
+          }`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="dark">
+              <div className="flex items-center gap-2">
+                <Moon className="h-4 w-4" />
+                <span>Dark</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="light">
+              <div className="flex items-center gap-2">
+                <Sun className="h-4 w-4" />
+                <span>Light</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === "chat" ? <ChatPage /> : <PromptsPage />}
+      </div>
     </div>
   );
 }

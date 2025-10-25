@@ -16,6 +16,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { PromptsService, McpService } from "@/fastapi_client";
+import { useTheme } from "@/components/theme-provider";
 
 interface Prompt {
   name: string;
@@ -41,6 +42,7 @@ interface MCPConfig {
 }
 
 export function PromptsPage() {
+  const { theme } = useTheme();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [mcpPrompts, setMcpPrompts] = useState<MCPItem[]>([]);
   const [mcpTools, setMcpTools] = useState<MCPItem[]>([]);
@@ -51,6 +53,8 @@ export function PromptsPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const isDark = theme === "dark";
 
   useEffect(() => {
     fetchData();
@@ -126,42 +130,75 @@ export function PromptsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="text-center">Loading prompts...</div>
+      <div className={`flex flex-col h-full ${
+        isDark ? "bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]"
+        : "bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50"
+      }`}>
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto py-8">
+            <div className={`text-center ${isDark ? "text-white" : "text-gray-900"}`}>
+              Loading prompts...
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="text-center text-red-500">{error}</div>
+      <div className={`flex flex-col h-full ${
+        isDark ? "bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]"
+        : "bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50"
+      }`}>
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto py-8">
+            <div className={`text-center ${isDark ? "text-red-400" : "text-red-600"}`}>
+              {error}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (selectedPrompt) {
     return (
-      <div className="container mx-auto py-8 max-w-4xl">
-        <Button variant="ghost" onClick={handleBack} className="mb-6">
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          Back to prompts
-        </Button>
+      <div className={`flex flex-col h-full ${
+        isDark ? "bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]"
+        : "bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50"
+      }`}>
+        <div className="flex-1 overflow-y-auto">
+          <div className="container mx-auto py-8 max-w-4xl">
+            <Button
+              variant="ghost"
+              onClick={handleBack}
+              className={`mb-6 ${
+                isDark ? "text-white hover:bg-white/10" : "text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back to prompts
+            </Button>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {selectedPrompt.name
-                .replace(/_/g, " ")
-                .replace(/\b\w/g, (l) => l.toUpperCase())}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg">
-              {selectedPrompt.content}
-            </pre>
-          </CardContent>
-        </Card>
+            <Card className={isDark ? "bg-white/5 border-white/10" : "bg-white border-gray-200"}>
+              <CardHeader>
+                <CardTitle className={isDark ? "text-white" : "text-gray-900"}>
+                  {selectedPrompt.name
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (l) => l.toUpperCase())}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className={`whitespace-pre-wrap font-mono text-sm p-4 rounded-lg ${
+                  isDark ? "bg-black/30 text-white/90" : "bg-gray-100 text-gray-900"
+                }`}>
+                  {selectedPrompt.content}
+                </pre>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -183,14 +220,18 @@ export function PromptsPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">MCP Discovery</h1>
+    <div className={`flex flex-col h-full ${
+      isDark ? "bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]" : "bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50"
+    }`}>
+      <div className="flex-1 overflow-y-auto">
+        <div className="container mx-auto py-8">
+          <h1 className={`text-3xl font-bold mb-8 ${isDark ? "text-white" : "text-gray-900"}`}>MCP Discovery</h1>
 
       {/* MCP Setup Instructions Section */}
       {mcpConfig && (
         <div className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-            <Terminal className="h-6 w-6" />
+          <h2 className={`text-2xl font-semibold mb-4 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+            <Terminal className={`h-6 w-6 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
             Claude Code MCP Setup
           </h2>
 
@@ -240,13 +281,13 @@ export function PromptsPage() {
 
       {/* Unified Prompts Section */}
       <div className="mb-12">
-        <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-          <FileCode className="h-6 w-6" />
+        <h2 className={`text-2xl font-semibold mb-4 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+          <FileCode className={`h-6 w-6 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
           MCP Prompts (Slash Commands)
         </h2>
 
         {mcpPrompts.length === 0 ? (
-          <div className="text-center text-muted-foreground mb-8">
+          <div className={`text-center mb-8 ${isDark ? "text-white/60" : "text-gray-600"}`}>
             No MCP prompts found.
           </div>
         ) : (
@@ -276,13 +317,13 @@ export function PromptsPage() {
 
       {/* MCP Tools Section */}
       <div className="mb-12">
-        <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
-          <Wrench className="h-6 w-6" />
+        <h2 className={`text-2xl font-semibold mb-4 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+          <Wrench className={`h-6 w-6 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
           MCP Tools
         </h2>
 
         {mcpTools.length === 0 ? (
-          <div className="text-center text-muted-foreground mb-8">
+          <div className={`text-center mb-8 ${isDark ? "text-white/60" : "text-gray-600"}`}>
             No MCP tools found.
           </div>
         ) : (
@@ -304,6 +345,8 @@ export function PromptsPage() {
             ))}
           </div>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );

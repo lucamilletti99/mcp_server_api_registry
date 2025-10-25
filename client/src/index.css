@@ -74,3 +74,39 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Databricks Genie-style gradient backgrounds */
+  .bg-genie-dark {
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+  }
+
+  .bg-genie-light {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  }
+
+  /* Animated gradient for empty state */
+  .bg-genie-animated {
+    background: linear-gradient(
+      -45deg,
+      #0f2027,
+      #203a43,
+      #2c5364,
+      #1a3a47
+    );
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+}
