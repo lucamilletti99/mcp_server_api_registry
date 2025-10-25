@@ -104,7 +104,11 @@ export function ChatPage() {
       content: input,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // Add user message and a temporary "thinking" message
+    setMessages((prev) => [...prev, userMessage, {
+      role: "assistant",
+      content: "Thinking...",
+    }]);
     setInput("");
     setLoading(true);
 
@@ -121,6 +125,21 @@ export function ChatPage() {
       });
 
       const data = await response.json();
+
+      // Remove the temporary "thinking" message
+      setMessages((prev) => prev.slice(0, -1));
+
+      // Check for API errors
+      if (data.detail) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Error: ${data.detail}`,
+          },
+        ]);
+        return;
+      }
 
       if (data.tool_calls && data.tool_calls.length > 0) {
         const toolResults: ToolResult[] = [];
@@ -374,7 +393,7 @@ export function ChatPage() {
                       : "bg-white text-gray-900 border border-gray-200"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words">
+                  <div className={`whitespace-pre-wrap break-words ${message.content === "Thinking..." ? "typing-indicator" : ""}`}>
                     {message.content}
                   </div>
                   {message.tool_calls && message.tool_calls.length > 0 && (
