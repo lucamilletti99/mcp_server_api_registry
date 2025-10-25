@@ -36,6 +36,71 @@ def get_workspace_client() -> WorkspaceClient:
     return WorkspaceClient(host=host)
 
 
+def _execute_sql_query(
+  query: str, warehouse_id: str = None, catalog: str = None, schema: str = None, limit: int = 100
+) -> dict:
+  """Helper function to execute SQL queries on Databricks SQL warehouse.
+
+  Args:
+      query: SQL query to execute
+      warehouse_id: SQL warehouse ID (optional, uses env var if not provided)
+      catalog: Catalog to use (optional)
+      schema: Schema to use (optional)
+      limit: Maximum number of rows to return (default: 100)
+
+  Returns:
+      Dictionary with query results or error message
+  """
+  try:
+    # Initialize Databricks SDK with on-behalf-of authentication
+    w = get_workspace_client()
+
+    # Get warehouse ID from parameter or environment
+    warehouse_id = warehouse_id or os.environ.get('DATABRICKS_SQL_WAREHOUSE_ID')
+    if not warehouse_id:
+      return {
+        'success': False,
+        'error': (
+          'No SQL warehouse ID provided. Set DATABRICKS_SQL_WAREHOUSE_ID or pass warehouse_id.'
+        ),
+      }
+
+    # Build the full query with catalog/schema if provided
+    full_query = query
+    if catalog and schema:
+      full_query = f'USE CATALOG {catalog}; USE SCHEMA {schema}; {query}'
+
+    print(f'🔧 Executing SQL on warehouse {warehouse_id}: {query[:100]}...')
+
+    # Execute the query
+    result = w.statement_execution.execute_statement(
+      warehouse_id=warehouse_id, statement=full_query, wait_timeout='30s'
+    )
+
+    # Process results
+    if result.result and result.result.data_array:
+      columns = [col.name for col in result.manifest.schema.columns]
+      data = []
+
+      for row in result.result.data_array[:limit]:
+        row_dict = {}
+        for i, col in enumerate(columns):
+          row_dict[col] = row[i]
+        data.append(row_dict)
+
+      return {'success': True, 'data': {'columns': columns, 'rows': data}, 'row_count': len(data)}
+    else:
+      return {
+        'success': True,
+        'data': {'message': 'Query executed successfully with no results'},
+        'row_count': 0,
+      }
+
+  except Exception as e:
+    print(f'❌ Error executing SQL: {str(e)}')
+    return {'success': False, 'error': f'Error: {str(e)}'}
+
+
 def load_tools(mcp_server):
   """Register all MCP tools with the server.
 
@@ -99,54 +164,46 @@ def load_tools(mcp_server):
     Returns:
         Dictionary with query results or error message
     """
-    try:
-      # Initialize Databricks SDK with on-behalf-of authentication
-      w = get_workspace_client()
+    return _execute_sql_query(query, warehouse_id, catalog, schema, limit)
 
-      # Get warehouse ID from parameter or environment
-      warehouse_id = warehouse_id or os.environ.get('DATABRICKS_SQL_WAREHOUSE_ID')
-      if not warehouse_id:
-        return {
-          'success': False,
-          'error': (
-            'No SQL warehouse ID provided. Set DATABRICKS_SQL_WAREHOUSE_ID or pass warehouse_id.'
-          ),
-        }
+  @mcp_server.tool
+  def check_api_registry(warehouse_id: str = None, limit: int = 100) -> dict:
+    """Check the Databricks API Registry to see all available API endpoints.
 
-      # Build the full query with catalog/schema if provided
-      full_query = query
-      if catalog and schema:
-        full_query = f'USE CATALOG {catalog}; USE SCHEMA {schema}; {query}'
+    This queries the luca_milletti.custom_mcp_server.api_registry table
+    to return all registered API endpoints in the Lakebase instance.
 
-      print(f'🔧 Executing SQL on warehouse {warehouse_id}: {query[:100]}...')
+    Args:
+        warehouse_id: SQL warehouse ID (optional, uses env var if not provided)
+        limit: Maximum number of rows to return (default: 100)
 
-      # Execute the query
-      result = w.statement_execution.execute_statement(
-        warehouse_id=warehouse_id, statement=full_query, wait_timeout='30s'
-      )
+    Returns:
+        Dictionary with API registry results including:
+        - List of all registered API endpoints
+        - API endpoint names and descriptions
+        - API configurations and metadata
+        - Current status of each endpoint
+    """
+    # Fixed query for the API registry table
+    query = 'SELECT * FROM luca_milletti.custom_mcp_server.api_registry'
 
-      # Process results
-      if result.result and result.result.data_array:
-        columns = [col.name for col in result.manifest.schema.columns]
-        data = []
+    # Use the catalog and schema explicitly
+    catalog = 'luca_milletti'
+    schema = 'custom_mcp_server'
 
-        for row in result.result.data_array[:limit]:
-          row_dict = {}
-          for i, col in enumerate(columns):
-            row_dict[col] = row[i]
-          data.append(row_dict)
+    # Execute the query using the helper function
+    result = _execute_sql_query(query, warehouse_id, catalog, schema, limit)
 
-        return {'success': True, 'data': {'columns': columns, 'rows': data}, 'row_count': len(data)}
-      else:
-        return {
-          'success': True,
-          'data': {'message': 'Query executed successfully with no results'},
-          'row_count': 0,
-        }
+    # Add context to the result
+    if result.get('success'):
+      result['registry_info'] = {
+        'catalog': catalog,
+        'schema': schema,
+        'table': 'api_registry',
+        'description': 'Databricks API Registry containing all available API endpoints',
+      }
 
-    except Exception as e:
-      print(f'❌ Error executing SQL: {str(e)}')
-      return {'success': False, 'error': f'Error: {str(e)}'}
+    return result
 
   @mcp_server.tool
   def list_warehouses() -> dict:
