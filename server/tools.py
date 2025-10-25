@@ -1,7 +1,9 @@
 """MCP Tools for Databricks operations."""
 
+import json
 import os
 
+import requests
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from fastmcp.server.dependencies import get_http_headers
@@ -201,6 +203,124 @@ def load_tools(mcp_server):
       }
 
     return result
+
+  @mcp_server.tool
+  def call_api_endpoint(
+    endpoint_url: str,
+    http_method: str = 'GET',
+    headers: str = None,
+    body: str = None,
+    timeout: int = 10,
+  ) -> dict:
+    """Call an API endpoint to check health and retrieve data.
+
+    This tool makes HTTP requests to external API endpoints to validate
+    they are working and return data. Useful for testing APIs in the registry.
+
+    Args:
+        endpoint_url: The full URL of the API endpoint to call
+        http_method: HTTP method to use (GET, POST, PUT, DELETE, etc.) - default: GET
+        headers: Optional JSON string of HTTP headers (e.g., '{"Authorization": "Bearer token"}')
+        body: Optional JSON string of request body for POST/PUT requests
+        timeout: Request timeout in seconds (default: 10)
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating if the request succeeded
+        - status_code: HTTP status code
+        - is_healthy: Boolean indicating if status is 2xx
+        - response_data: Response body (parsed JSON if possible, else text)
+        - response_preview: First 500 chars of response
+        - headers: Response headers
+        - error: Error message if request failed
+    """
+    try:
+      # Parse headers if provided
+      request_headers = {}
+      if headers:
+        try:
+          request_headers = json.loads(headers)
+        except json.JSONDecodeError:
+          return {
+            'success': False,
+            'error': 'Invalid JSON format for headers',
+          }
+
+      # Parse body if provided
+      request_body = None
+      if body:
+        try:
+          request_body = json.loads(body)
+        except json.JSONDecodeError:
+          # If not JSON, use as plain text
+          request_body = body
+
+      print(f'🌐 Calling API: {http_method} {endpoint_url}')
+
+      # Make the HTTP request
+      response = requests.request(
+        method=http_method.upper(),
+        url=endpoint_url,
+        headers=request_headers,
+        json=request_body if isinstance(request_body, dict) else None,
+        data=request_body if isinstance(request_body, str) else None,
+        timeout=timeout,
+      )
+
+      # Check if response is healthy (2xx status code)
+      is_healthy = 200 <= response.status_code < 300
+
+      # Try to parse response as JSON
+      try:
+        response_data = response.json()
+        response_type = 'json'
+      except Exception:
+        response_data = response.text
+        response_type = 'text'
+
+      # Create preview of response
+      response_str = json.dumps(response_data, indent=2) if response_type == 'json' else response_data
+      response_preview = response_str[:500] + '...' if len(response_str) > 500 else response_str
+
+      return {
+        'success': True,
+        'status_code': response.status_code,
+        'status_text': response.reason,
+        'is_healthy': is_healthy,
+        'response_type': response_type,
+        'response_data': response_data,
+        'response_preview': response_preview,
+        'response_size': len(response.content),
+        'headers': dict(response.headers),
+        'url': endpoint_url,
+        'method': http_method.upper(),
+      }
+
+    except requests.exceptions.Timeout:
+      return {
+        'success': False,
+        'is_healthy': False,
+        'error': f'Request timed out after {timeout} seconds',
+        'url': endpoint_url,
+        'method': http_method.upper(),
+      }
+    except requests.exceptions.ConnectionError:
+      return {
+        'success': False,
+        'is_healthy': False,
+        'error': 'Connection error - could not reach the endpoint',
+        'url': endpoint_url,
+        'method': http_method.upper(),
+      }
+    except Exception as e:
+      print(f'❌ Error calling API: {str(e)}')
+      return {
+        'success': False,
+        'is_healthy': False,
+        'error': f'Error: {str(e)}',
+        'url': endpoint_url,
+        'method': http_method.upper(),
+      }
 
   @mcp_server.tool
   def list_warehouses() -> dict:
