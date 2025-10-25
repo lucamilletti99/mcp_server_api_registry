@@ -13,7 +13,8 @@ environment:
     value_from: workspace
   - name: DATABRICKS_PATH
     value_from: workspace
-  - name: DATABRICKS_TOKEN
-    value_from: pat
+  # Note: DATABRICKS_TOKEN (PAT) removed to avoid conflict with OAuth
+  # The app will use OAuth (service principal) credentials automatically
+  # and on-behalf-of user tokens from X-Forwarded-Access-Token header
   - name: DATABRICKS_APP_PORT
     value_from: app_port

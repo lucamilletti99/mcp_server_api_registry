@@ -31,6 +31,7 @@ async def get_health(request: Request) -> Dict[str, Any]:
   user_info = None
   if user_token_present:
     try:
+      # Use user's token for on-behalf-of authentication
       w = WorkspaceClient(host=os.environ.get('DATABRICKS_HOST'), token=user_token)
       current_user = w.current_user.me()
       user_info = {

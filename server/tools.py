@@ -9,7 +9,7 @@ from fastmcp.server.dependencies import get_http_headers
 def get_workspace_client() -> WorkspaceClient:
   """Get a WorkspaceClient with on-behalf-of user authentication.
 
-  Falls back to service principal authentication if user token is not available.
+  Falls back to OAuth service principal authentication if user token is not available.
 
   Returns:
       WorkspaceClient configured with appropriate authentication
@@ -25,9 +25,11 @@ def get_workspace_client() -> WorkspaceClient:
     print(f'🔐 Using on-behalf-of authentication (user token)')
     return WorkspaceClient(host=host, token=user_token)
   else:
-    # Fall back to service principal authentication
-    print(f'🔐 Using service principal authentication (fallback)')
-    return WorkspaceClient(host=host, token=os.environ.get('DATABRICKS_TOKEN'))
+    # Fall back to OAuth service principal authentication
+    # WorkspaceClient will automatically use DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET
+    # which are injected by Databricks Apps platform
+    print(f'🔐 Using OAuth service principal authentication (fallback)')
+    return WorkspaceClient(host=host)
 
 
 def load_tools(mcp_server):
