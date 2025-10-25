@@ -2,7 +2,7 @@
 
 **IMMEDIATE ACTION REQUIRED:** Query the API registry table right now to see all available API endpoints in the Lakebase instance.
 
-You must execute this exact SQL query immediately using the `execute_dbsql` tool:
+If you are not provided a warehouse_id, please reprompt the user prior to following: You must execute this exact SQL query immediately using the `execute_dbsql` tool:
 
 ```sql
 SELECT * FROM luca_milletti.custom_mcp_server.api_registry
@@ -32,6 +32,6 @@ SELECT * FROM luca_milletti.custom_mcp_server.api_registry
 - This query uses your authenticated user credentials (on-behalf-of auth)
 - You must have access to the `luca_milletti.custom_mcp_server` catalog and schema
 - The query will use the default SQL warehouse configured in the environment
-- If you need to specify a warehouse, add the `warehouse_id` parameter to the tool call
+- If you need to specify a warehouse, add the `warehouse_id` parameter to the tool call;
 
 **Execute this SQL query now using the execute_dbsql MCP tool to see all available API endpoints in the registry.**
