@@ -2,6 +2,8 @@
 
 import json
 import os
+from typing import Dict, List
+from urllib.parse import parse_qs, urlparse
 
 import requests
 from databricks.sdk import WorkspaceClient
@@ -101,6 +103,53 @@ def _execute_sql_query(
   except Exception as e:
     print(f'❌ Error executing SQL: {str(e)}')
     return {'success': False, 'error': f'Error: {str(e)}'}
+
+
+def _analyze_api_capabilities(data: Dict) -> Dict:
+  """Analyze API response data to understand capabilities."""
+  capabilities = {'data_structure': {}, 'available_fields': [], 'data_types': {}, 'insights': []}
+
+  try:
+    # Identify the structure
+    if isinstance(data, dict):
+      capabilities['data_structure']['type'] = 'object'
+      capabilities['available_fields'] = list(data.keys())
+
+      # Look for common API patterns
+      if 'data' in data:
+        capabilities['insights'].append('API uses "data" wrapper for results')
+      if 'error' in data or 'Error Message' in data:
+        capabilities['insights'].append('Response contains error information')
+      if 'results' in data or 'items' in data:
+        capabilities['insights'].append('API returns multiple items/results')
+
+      # Analyze field types
+      for key, value in data.items():
+        if isinstance(value, dict):
+          capabilities['data_types'][key] = 'nested_object'
+          # Look deeper into nested objects
+          if key == 'Meta Data':
+            capabilities['insights'].append('Contains metadata about the request/data')
+          elif 'Time Series' in key:
+            capabilities['insights'].append(f'Time series data available: {key}')
+        elif isinstance(value, list):
+          capabilities['data_types'][key] = f'array (length: {len(value)})'
+          if value and isinstance(value[0], dict):
+            capabilities['insights'].append(f'{key} contains array of objects')
+        else:
+          capabilities['data_types'][key] = type(value).__name__
+
+    elif isinstance(data, list):
+      capabilities['data_structure']['type'] = 'array'
+      capabilities['data_structure']['length'] = len(data)
+      if data and isinstance(data[0], dict):
+        capabilities['available_fields'] = list(data[0].keys())
+        capabilities['insights'].append('Array of objects - likely list of records')
+
+  except Exception as e:
+    capabilities['error'] = f'Analysis error: {str(e)}'
+
+  return capabilities
 
 
 def load_tools(mcp_server):
@@ -320,6 +369,178 @@ def load_tools(mcp_server):
         'error': f'Error: {str(e)}',
         'url': endpoint_url,
         'method': http_method.upper(),
+      }
+
+  @mcp_server.tool
+  def discover_api_endpoint(endpoint_url: str, api_key: str = None, timeout: int = 10) -> dict:
+    """Discover API endpoint requirements and capabilities.
+
+    This tool analyzes an API endpoint to determine:
+    1. Whether it requires authentication (API key)
+    2. What data and capabilities the API provides
+
+    If authentication is required but not provided, the tool will indicate
+    that the user should provide an API key.
+
+    Args:
+        endpoint_url: The full URL of the API endpoint to discover
+        api_key: Optional API key if the endpoint requires authentication
+        timeout: Request timeout in seconds (default: 10)
+
+    Returns:
+        Dictionary with discovery results including:
+        - requires_auth: Boolean indicating if API key is needed
+        - auth_detected: Details about detected authentication method
+        - data_capabilities: What data the API provides
+        - available_endpoints: Suggested endpoints or functions
+        - sample_response: Sample data from the API
+        - next_steps: Recommendations for user
+    """
+    try:
+      # Parse the URL to understand structure
+      parsed_url = urlparse(endpoint_url)
+      query_params = parse_qs(parsed_url.query)
+      base_url = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
+
+      print(f'🔍 Discovering API endpoint: {endpoint_url}')
+
+      # First attempt: Call without API key
+      try:
+        response_no_auth = requests.get(endpoint_url, timeout=timeout)
+        initial_status = response_no_auth.status_code
+        initial_response = response_no_auth.text
+
+        # Try to parse as JSON
+        try:
+          initial_data = response_no_auth.json()
+        except Exception:
+          initial_data = initial_response
+
+      except Exception as e:
+        return {
+          'success': False,
+          'error': f'Failed to reach endpoint: {str(e)}',
+          'next_steps': ['Check if the URL is correct', 'Verify internet connectivity'],
+        }
+
+      # Analyze the response for authentication requirements
+      requires_auth = False
+      auth_hints = []
+
+      # Check for auth indicators
+      if initial_status in [401, 403]:
+        requires_auth = True
+        auth_hints.append(f'HTTP {initial_status} - Authentication required')
+
+      # Check response content for API key mentions (common patterns)
+      auth_keywords = ['api key', 'apikey', 'api_key', 'authentication', 'unauthorized', 'forbidden']
+      response_lower = str(initial_data).lower()
+
+      for keyword in auth_keywords:
+        if keyword in response_lower:
+          requires_auth = True
+          auth_hints.append(f'Response mentions: "{keyword}"')
+
+      # If API key is provided, try with authentication
+      authenticated_response = None
+      if api_key:
+        print(f'🔑 Trying with provided API key...')
+
+        # Try common API key patterns
+        auth_attempts = [
+          {'params': {**query_params, 'apikey': [api_key]}},
+          {'params': {**query_params, 'api_key': [api_key]}},
+          {'headers': {'Authorization': f'Bearer {api_key}'}},
+          {'headers': {'X-API-Key': api_key}},
+        ]
+
+        for attempt in auth_attempts:
+          try:
+            # Flatten query params for requests
+            params = {k: v[0] if isinstance(v, list) else v for k, v in attempt.get('params', {}).items()}
+
+            auth_response = requests.get(
+              base_url, params=params, headers=attempt.get('headers', {}), timeout=timeout
+            )
+
+            if auth_response.status_code == 200:
+              authenticated_response = auth_response
+              print(f'✅ Authentication successful!')
+              break
+          except Exception:
+            continue
+
+      # Analyze the data capabilities
+      response_to_analyze = authenticated_response if authenticated_response else response_no_auth
+
+      if response_to_analyze.status_code == 200:
+        try:
+          data = response_to_analyze.json()
+          data_capabilities = _analyze_api_capabilities(data)
+        except Exception:
+          data = response_to_analyze.text
+          data_capabilities = {'type': 'text', 'preview': data[:200]}
+
+        # Build discovery results
+        result = {
+          'success': True,
+          'endpoint_url': endpoint_url,
+          'base_url': base_url,
+          'requires_auth': requires_auth,
+          'auth_detected': {
+            'hints': auth_hints,
+            'authenticated': bool(authenticated_response),
+          }
+          if requires_auth
+          else None,
+          'status_code': response_to_analyze.status_code,
+          'data_capabilities': data_capabilities,
+          'sample_response': data if isinstance(data, dict) else str(data)[:500],
+        }
+
+        # Determine next steps
+        if requires_auth and not api_key:
+          result['next_steps'] = [
+            '⚠️  This API requires authentication',
+            'Please provide an API key using the api_key parameter',
+            'Common parameter names: apikey, api_key, or Authorization header',
+          ]
+        elif requires_auth and not authenticated_response:
+          result['next_steps'] = [
+            '⚠️  Authentication failed with provided API key',
+            'Check if the API key is correct',
+            'Try different authentication methods (query param vs header)',
+          ]
+        else:
+          result['next_steps'] = [
+            '✅ API is accessible and returning data',
+            'Review data_capabilities to understand what the API provides',
+            'Consider registering this endpoint in the api_registry',
+          ]
+
+        return result
+
+      else:
+        return {
+          'success': False,
+          'endpoint_url': endpoint_url,
+          'status_code': response_to_analyze.status_code,
+          'requires_auth': requires_auth,
+          'auth_hints': auth_hints,
+          'error': f'API returned status {response_to_analyze.status_code}',
+          'next_steps': [
+            'Check the endpoint URL',
+            'Verify required parameters are included',
+            'Provide API key if authentication is required',
+          ],
+        }
+
+    except Exception as e:
+      print(f'❌ Error discovering API: {str(e)}')
+      return {
+        'success': False,
+        'error': f'Discovery error: {str(e)}',
+        'next_steps': ['Check the endpoint URL', 'Verify the API is accessible'],
       }
 
   @mcp_server.tool
