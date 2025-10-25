@@ -49,7 +49,7 @@ class ChatResponse(BaseModel):
     """Response from the chat endpoint."""
 
     role: str
-    content: str
+    content: str | None = None  # Content can be None when tool calls are present
     tool_calls: List[ToolCall] | None = None
     finish_reason: str
 
@@ -172,8 +172,20 @@ def convert_mcp_tools_to_openai_format(mcp_tools: List[Any]) -> List[Dict[str, A
         # Extract parameters from the tool's input schema
         parameters = {'type': 'object', 'properties': {}, 'required': []}
 
-        if hasattr(tool, 'schema') and tool.schema:
-            schema = tool.schema
+        # Try to get schema - it might be a method or property
+        schema = None
+        if hasattr(tool, 'schema'):
+            # Check if it's callable (a method)
+            if callable(tool.schema):
+                schema = tool.schema()
+            else:
+                schema = tool.schema
+
+        # Also try input_schema directly
+        if schema is None and hasattr(tool, 'input_schema'):
+            schema = {'inputSchema': tool.input_schema}
+
+        if schema and isinstance(schema, dict):
             if 'inputSchema' in schema:
                 input_schema = schema['inputSchema']
                 parameters = {
@@ -203,14 +215,31 @@ async def get_mcp_tools() -> List[Dict[str, Any]]:
     """
     from server.app import mcp_server as mcp
 
-    tools_list = []
+    openai_tools = []
 
     # Get tools dynamically from FastMCP
     if hasattr(mcp, '_tool_manager'):
         mcp_tools = await mcp._tool_manager.list_tools()
-        tools_list = convert_mcp_tools_to_openai_format(mcp_tools)
 
-    return tools_list
+        # Convert to OpenAI format
+        for tool in mcp_tools:
+            # For now, use basic schema without full parameter definitions
+            # The model will infer parameters from the description
+            openai_tool = {
+                'type': 'function',
+                'function': {
+                    'name': tool.key,
+                    'description': tool.description or f'{tool.key.replace("_", " ").title()}',
+                    'parameters': {
+                        'type': 'object',
+                        'properties': {},
+                        'required': [],
+                    },
+                },
+            }
+            openai_tools.append(openai_tool)
+
+    return openai_tools
 
 
 async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
@@ -230,13 +259,11 @@ async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any]) -> Dict[st
         if hasattr(mcp, '_tool_manager'):
             # Call the tool with the provided arguments
             result = await mcp._tool_manager.call_tool(tool_name, tool_args)
-            return result
+            return result.model_dump() if hasattr(result, 'model_dump') else result
     except Exception as e:
-        return {
-            'error': str(e),
-            'tool_name': tool_name,
-            'status': 'failed',
-        }
+        return {'error': str(e), 'tool_name': tool_name, 'status': 'failed'}
+
+    return {'error': 'Tool manager not found', 'tool_name': tool_name, 'status': 'failed'}
 
 
 @router.post('/message', response_model=ChatResponse)
