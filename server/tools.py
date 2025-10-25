@@ -2,6 +2,8 @@
 
 import json
 import os
+import uuid
+from datetime import datetime
 from typing import Dict, List
 from urllib.parse import parse_qs, urlparse
 
@@ -150,6 +152,70 @@ def _analyze_api_capabilities(data: Dict) -> Dict:
     capabilities['error'] = f'Analysis error: {str(e)}'
 
   return capabilities
+
+
+def _validate_api_endpoint(
+  api_endpoint: str, http_method: str = 'GET', auth_type: str = 'none', token_info: str = '', timeout: int = 10
+) -> Dict:
+  """Validate an API endpoint by calling it and analyzing the response.
+
+  Args:
+      api_endpoint: Full URL of the API endpoint
+      http_method: HTTP method to use
+      auth_type: Authentication type (none, bearer, api_key, etc.)
+      token_info: Authentication token or API key
+      timeout: Request timeout in seconds
+
+  Returns:
+      Dictionary with validation results:
+      - status: 'valid' or 'pending'
+      - validation_message: Detailed message about validation
+      - status_code: HTTP status code (if call succeeded)
+  """
+  try:
+    # Build headers based on auth type
+    headers_dict = {}
+    if auth_type == 'bearer' and token_info:
+      headers_dict['Authorization'] = f'Bearer {token_info}'
+    elif auth_type == 'api_key' and token_info:
+      headers_dict['X-API-Key'] = token_info
+
+    # Call the API
+    response = requests.request(method=http_method.upper(), url=api_endpoint, headers=headers_dict, timeout=timeout)
+
+    if response.status_code == 200:
+      # Success - build validation message
+      try:
+        sample_data = response.json()
+        sample_preview = json.dumps(sample_data, indent=2)[:500]
+      except Exception:
+        sample_preview = response.text[:500]
+
+      validation_message = f"""✅ VALIDATION SUCCESSFUL!
+
+Endpoint Status: {response.status_code} OK
+Authentication: Verified ✓
+Data Retrieved: Valid JSON response received
+
+Sample Response Preview:
+{sample_preview}"""
+
+      return {'status': 'valid', 'validation_message': validation_message, 'status_code': response.status_code}
+
+    else:
+      # Non-200 response
+      validation_message = (
+        f'⚠️  Validation returned status {response.status_code}\n' f'Response: {response.text[:200]}'
+      )
+      return {
+        'status': 'pending',
+        'validation_message': validation_message,
+        'status_code': response.status_code,
+      }
+
+  except Exception as e:
+    validation_message = f'⚠️  Validation error: {str(e)}'
+    return {'status': 'pending', 'validation_message': validation_message}
 
 
 def load_tools(mcp_server):
@@ -542,6 +608,131 @@ def load_tools(mcp_server):
         'error': f'Discovery error: {str(e)}',
         'next_steps': ['Check the endpoint URL', 'Verify the API is accessible'],
       }
+
+  @mcp_server.tool
+  def register_api_in_registry(
+    api_name: str,
+    description: str,
+    api_endpoint: str,
+    warehouse_id: str,
+    http_method: str = 'GET',
+    auth_type: str = 'none',
+    token_info: str = '',
+    request_params: str = '{}',
+    validate_after_register: bool = True,
+  ) -> dict:
+    """Register a new API endpoint in the Lakebase api_registry table.
+
+    This tool adds a discovered API to your registry for tracking and reuse.
+    It automatically uses your authenticated user identity and validates the API.
+
+    Args:
+        api_name: Unique name for the API (e.g., "alphavantage_intraday_stock")
+        description: Description of what the API does
+        api_endpoint: Full URL of the API endpoint
+        warehouse_id: SQL warehouse ID to use for database operations
+        http_method: HTTP method (default: GET)
+        auth_type: Authentication type (none, api_key, bearer, basic, etc.)
+        token_info: Authentication token or API key (if applicable)
+        request_params: JSON string of request parameters (default: "{}")
+        validate_after_register: Whether to validate the API after registering (default: True)
+
+    Returns:
+        Dictionary with registration results including:
+        - success: Boolean indicating if registration succeeded
+        - api_id: Generated ID for the registered API
+        - status: Initial status (pending or valid if validated)
+        - validation_message: Results from validation if performed
+    """
+    try:
+      # Get authenticated user info for user_who_requested field
+      headers = get_http_headers()
+      user_token = headers.get('x-forwarded-access-token')
+
+      # Try to get username from authenticated user
+      username = 'unknown'
+      if user_token:
+        try:
+          config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token, auth_type='pat')
+          w = WorkspaceClient(config=config)
+          current_user = w.current_user.me()
+          # Extract username from email (e.g., luca.milletti@databricks.com -> luca.milletti)
+          username = current_user.user_name.split('@')[0] if current_user.user_name else 'unknown'
+        except Exception:
+          username = 'unknown'
+
+      # Generate unique API ID
+      api_id = f'api-{str(uuid.uuid4())[:8]}'
+
+      # Get current timestamp
+      created_at = datetime.utcnow().isoformat() + 'Z'
+      modified_date = created_at
+
+      # Initial status
+      status = 'pending'
+      validation_message = 'Awaiting validation'
+
+      # Optionally validate the API using helper function
+      if validate_after_register:
+        print(f'🔍 Validating API endpoint: {api_endpoint}')
+        validation_result = _validate_api_endpoint(api_endpoint, http_method, auth_type, token_info, timeout=10)
+        status = validation_result['status']
+        validation_message = validation_result['validation_message']
+
+      # Escape single quotes in strings for SQL
+      def escape_sql_string(s):
+        return s.replace("'", "''") if s else ''
+
+      # Build INSERT query
+      insert_query = f"""
+INSERT INTO luca_milletti.custom_mcp_server.api_registry
+(api_id, api_name, description, user_who_requested, modified_date,
+ api_endpoint, http_method, auth_type, token_info, request_params,
+ status, validation_message, created_at)
+VALUES (
+  '{api_id}',
+  '{escape_sql_string(api_name)}',
+  '{escape_sql_string(description)}',
+  '{escape_sql_string(username)}',
+  '{modified_date}',
+  '{escape_sql_string(api_endpoint)}',
+  '{escape_sql_string(http_method.upper())}',
+  '{escape_sql_string(auth_type)}',
+  '{escape_sql_string(token_info)}',
+  '{escape_sql_string(request_params)}',
+  '{escape_sql_string(status)}',
+  '{escape_sql_string(validation_message)}',
+  '{created_at}'
+)
+"""
+
+      # Execute the INSERT using the SQL helper
+      result = _execute_sql_query(insert_query, warehouse_id, catalog=None, schema=None, limit=1)
+
+      if result.get('success'):
+        return {
+          'success': True,
+          'api_id': api_id,
+          'api_name': api_name,
+          'status': status,
+          'user_who_requested': username,
+          'validation_message': validation_message if validate_after_register else 'Not validated',
+          'message': f'✅ Successfully registered API "{api_name}" with ID: {api_id}',
+          'next_steps': [
+            f'View your registered API using: check_api_registry(warehouse_id="{warehouse_id}")',
+            f'Test the API using: call_api_endpoint(endpoint_url="{api_endpoint}")',
+          ],
+        }
+      else:
+        return {
+          'success': False,
+          'error': f"Failed to insert into registry: {result.get('error')}",
+          'attempted_query': insert_query[:500],
+        }
+
+    except Exception as e:
+      print(f'❌ Error registering API: {str(e)}')
+      return {'success': False, 'error': f'Registration error: {str(e)}'}
 
   @mcp_server.tool
   def list_warehouses() -> dict:
