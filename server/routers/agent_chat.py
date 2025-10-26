@@ -1,0 +1,432 @@
+"""Agent chat router - uses notebook MCP agent for orchestration.
+
+This router provides a simple chat interface that delegates all orchestration
+to the notebook agent pattern. The notebook handles:
+- Connecting to MCP server
+- Calling Foundation Models
+- Executing tools via MCP
+- MLflow tracing
+
+The frontend just sends messages and gets responses back.
+"""
+
+import asyncio
+import os
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.core import Config
+import httpx
+import json
+
+router = APIRouter()
+
+# Cache the MCP tools at startup so we don't reload them on every request
+_tools_cache: Optional[List[Dict[str, Any]]] = None
+_mcp_server_url: Optional[str] = None
+
+
+def get_workspace_client(request: Request = None) -> WorkspaceClient:
+    """Get authenticated Databricks workspace client with on-behalf-of user auth.
+
+    Uses the user's OAuth token from X-Forwarded-Access-Token header when available.
+    Falls back to OAuth service principal authentication if user token is not available.
+
+    Args:
+        request: FastAPI Request object to extract user token from
+
+    Returns:
+        WorkspaceClient configured with appropriate authentication
+    """
+    host = os.environ.get('DATABRICKS_HOST')
+
+    # Try to get user token from request headers (on-behalf-of authentication)
+    user_token = None
+    if request:
+        user_token = request.headers.get('x-forwarded-access-token')
+
+    if user_token:
+        # Use on-behalf-of authentication with user's token
+        # auth_type='pat' forces token-only auth and disables auto-detection
+        config = Config(host=host, token=user_token, auth_type='pat')
+        return WorkspaceClient(config=config)
+    else:
+        # Fall back to OAuth service principal authentication
+        return WorkspaceClient(host=host)
+
+
+class ChatMessage(BaseModel):
+    """A single chat message."""
+    role: str  # 'user' or 'assistant'
+    content: str
+
+
+class AgentChatRequest(BaseModel):
+    """Request to chat with the agent."""
+    messages: List[ChatMessage]
+    model: str = 'databricks-claude-sonnet-4'  # Claude Sonnet 4 (best model for tool calling)
+    max_tokens: int = 4096
+
+
+class AgentChatResponse(BaseModel):
+    """Response from the agent."""
+    response: str
+    iterations: int
+    tool_calls: List[Dict[str, Any]]
+
+
+async def load_mcp_tools_cached(force_reload: bool = False) -> List[Dict[str, Any]]:
+    """Load tools from MCP server (cached).
+
+    Args:
+        force_reload: Force reload even if cached
+
+    Returns:
+        List of tools in OpenAI format
+    """
+    global _tools_cache
+
+    # Return cached tools if available
+    if _tools_cache is not None and not force_reload:
+        return _tools_cache
+
+    # Import the MCP server instance from the app
+    from server.app import mcp_server as mcp
+
+    # Get tools directly from the MCP server instance (no HTTP!)
+    if hasattr(mcp, '_tool_manager'):
+        mcp_tools = await mcp._tool_manager.list_tools()
+
+        # Convert to OpenAI format
+        openai_tools = []
+        for tool in mcp_tools:
+            openai_tool = {
+                "type": "function",
+                "function": {
+                    "name": tool.key,
+                    "description": tool.description or tool.key,
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    }
+                }
+            }
+            openai_tools.append(openai_tool)
+
+        # Cache the tools
+        _tools_cache = openai_tools
+        return openai_tools
+
+    return []
+
+
+async def call_foundation_model(
+    messages: List[Dict[str, str]],
+    model: str,
+    tools: Optional[List[Dict]] = None,
+    max_tokens: int = 4096,
+    request: Request = None
+) -> Dict[str, Any]:
+    """Call a Databricks Foundation Model.
+
+    Args:
+        messages: Conversation history
+        model: Model endpoint name
+        tools: Available tools
+        max_tokens: Maximum response tokens
+        request: FastAPI Request object for on-behalf-of auth
+
+    Returns:
+        Model response
+    """
+    ws = get_workspace_client(request)
+    base_url = ws.config.host.rstrip('/')
+    token = ws.config.token
+
+    # Validate we have the required credentials
+    if not base_url:
+        raise HTTPException(
+            status_code=500,
+            detail='DATABRICKS_HOST not configured'
+        )
+    if not token:
+        raise HTTPException(
+            status_code=500,
+            detail='No authentication token available (check OAuth configuration)'
+        )
+
+    payload = {
+        "messages": messages,
+        "max_tokens": max_tokens
+    }
+
+    if tools:
+        payload["tools"] = tools
+
+    # Log the request payload for debugging
+    print(f"[Model Call] Sending {len(messages)} messages, {len(tools) if tools else 0} tools")
+    print(f"[Model Call] Last message: {messages[-1] if messages else 'none'}")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f'{base_url}/serving-endpoints/{model}/invocations',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+            },
+            json=payload,
+            timeout=120.0
+        )
+
+        if response.status_code != 200:
+            error_detail = f'Model call failed: {response.text}'
+
+            # Provide more helpful error messages for common issues
+            if response.status_code == 401:
+                error_detail += ' (Authentication failed - check OAuth token)'
+            elif response.status_code == 403:
+                error_detail += ' (Permission denied - check app.yaml scopes include "all-apis")'
+            elif response.status_code == 404:
+                error_detail += f' (Model endpoint "{model}" not found)'
+
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=error_detail
+            )
+
+        return response.json()
+
+
+async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any]) -> str:
+    """Execute a tool directly via MCP server instance.
+
+    Args:
+        tool_name: Name of the tool
+        tool_args: Tool arguments
+
+    Returns:
+        Tool result as string
+    """
+    # Import the MCP server instance from the app
+    from server.app import mcp_server as mcp
+
+    try:
+        # Execute the tool directly (no HTTP!)
+        if hasattr(mcp, '_tool_manager'):
+            result = await mcp._tool_manager.call_tool(tool_name, tool_args)
+
+            # Convert ToolResult to string
+            if hasattr(result, 'model_dump'):
+                result_dict = result.model_dump()
+                if 'content' in result_dict:
+                    content_list = result_dict['content']
+                    if isinstance(content_list, list) and len(content_list) > 0:
+                        first_content = content_list[0]
+                        if isinstance(first_content, dict) and 'text' in first_content:
+                            return first_content['text']
+                return json.dumps(result_dict)
+            elif hasattr(result, 'content'):
+                # FastMCP ToolResult
+                content_parts = []
+                for content in result.content:
+                    if hasattr(content, 'text'):
+                        content_parts.append(content.text)
+                return "".join(content_parts)
+            else:
+                return str(result)
+
+    except Exception as e:
+        return f"Error executing tool {tool_name}: {str(e)}"
+
+    return f"Tool {tool_name} not found"
+
+
+async def run_agent_loop(
+    user_messages: List[Dict[str, str]],
+    model: str,
+    tools: List[Dict[str, Any]],
+    max_iterations: int = 10,
+    request: Request = None
+) -> Dict[str, Any]:
+    """Run the agentic loop.
+
+    This is the core logic from the notebook, adapted for FastAPI.
+
+    Args:
+        user_messages: User conversation history
+        model: Model endpoint name
+        tools: Available tools
+        max_iterations: Max agent iterations
+        request: FastAPI Request object for on-behalf-of auth
+
+    Returns:
+        Final response with traces
+    """
+    messages = user_messages.copy()
+    traces = []
+
+    for iteration in range(max_iterations):
+        # Call the model
+        print(f"[Agent Loop] Iteration {iteration + 1}: Calling model with {len(messages)} messages")
+        response = await call_foundation_model(messages, model=model, tools=tools, request=request)
+
+        # Extract assistant message
+        if 'choices' not in response or len(response['choices']) == 0:
+            print(f"[Agent Loop] No choices in response, breaking")
+            break
+
+        choice = response['choices'][0]
+        message = choice.get('message', {})
+        finish_reason = choice.get('finish_reason', 'unknown')
+
+        print(f"[Agent Loop] Model response - finish_reason: {finish_reason}")
+        print(f"[Agent Loop] Message keys: {list(message.keys())}")
+
+        # Check for tool calls
+        tool_calls = message.get('tool_calls')
+        print(f"[Agent Loop] Tool calls: {len(tool_calls) if tool_calls else 0}")
+
+        if tool_calls:
+            # All models use OpenAI format for requests to Databricks API
+            assistant_msg = {
+                "role": "assistant",
+                "tool_calls": tool_calls
+            }
+            # Only include content if it's actually present and non-empty
+            if message.get('content'):
+                assistant_msg["content"] = message.get('content')
+
+            messages.append(assistant_msg)
+
+            # Execute each tool
+            for tc in tool_calls:
+                tool_name = tc['function']['name']
+                tool_args = json.loads(tc['function']['arguments'])
+
+                # Execute via MCP
+                result = await execute_mcp_tool(tool_name, tool_args)
+
+                # Ensure result is not empty
+                if not result or result.strip() == "":
+                    result = f"Tool {tool_name} completed successfully (no output)"
+
+                # Add tool result to conversation (OpenAI format)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc['id'],
+                    "content": result
+                })
+
+                traces.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": result
+                })
+
+        else:
+            # Final answer from model
+            final_content = message.get('content', '')
+
+            return {
+                "response": final_content,
+                "iterations": iteration + 1,
+                "traces": traces,
+                "finish_reason": finish_reason
+            }
+
+    return {
+        "response": "Agent reached maximum iterations",
+        "iterations": max_iterations,
+        "traces": traces,
+        "finish_reason": "max_iterations"
+    }
+
+
+@router.post('/chat', response_model=AgentChatResponse)
+async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentChatResponse:
+    """Chat with the agent using MCP orchestration.
+
+    This endpoint uses the notebook agent pattern under the hood.
+    The frontend just sends messages and gets responses back.
+
+    Args:
+        chat_request: Chat request with messages and model
+        request: FastAPI Request object for on-behalf-of auth
+
+    Returns:
+        Agent response with tool call traces
+    """
+    try:
+        # Load tools (cached after first call)
+        tools = await load_mcp_tools_cached()
+
+        # Convert Pydantic messages to dict
+        messages = [{"role": msg.role, "content": msg.content} for msg in chat_request.messages]
+
+        # Run the agent loop (this is the notebook pattern)
+        result = await run_agent_loop(
+            user_messages=messages,
+            model=chat_request.model,
+            tools=tools,
+            max_iterations=10,
+            request=request
+        )
+
+        return AgentChatResponse(
+            response=result["response"],
+            iterations=result["iterations"],
+            tool_calls=result["traces"]
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Agent chat failed: {str(e)}'
+        )
+
+
+@router.get('/tools')
+async def list_agent_tools() -> Dict[str, Any]:
+    """List available tools from MCP server.
+
+    Returns:
+        Dictionary with tools list
+    """
+    try:
+        tools = await load_mcp_tools_cached()
+        return {
+            "tools": tools,
+            "count": len(tools),
+            "server_url": _mcp_server_url
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Failed to list tools: {str(e)}'
+        )
+
+
+@router.post('/tools/reload')
+async def reload_tools() -> Dict[str, Any]:
+    """Force reload tools from MCP server.
+
+    Useful when you deploy new tools to the MCP server.
+
+    Returns:
+        Dictionary with reloaded tools
+    """
+    try:
+        tools = await load_mcp_tools_cached(force_reload=True)
+        return {
+            "message": "Tools reloaded successfully",
+            "count": len(tools),
+            "tools": [t["function"]["name"] for t in tools]
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f'Failed to reload tools: {str(e)}'
+        )

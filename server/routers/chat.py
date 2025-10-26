@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 import httpx
 from databricks.sdk import WorkspaceClient
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Body
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -70,7 +70,7 @@ async def list_available_models() -> Dict[str, Any]:
             'id': 'databricks-claude-sonnet-4-5',
             'name': 'Claude Sonnet 4.5',
             'provider': 'Anthropic',
-            'supports_tools': True,
+            'supports_tools': False,
             'context_window': 200000,
             'type': 'Pay-per-token',
         },
@@ -78,7 +78,7 @@ async def list_available_models() -> Dict[str, Any]:
             'id': 'databricks-claude-opus-4-1',
             'name': 'Claude Opus 4.1',
             'provider': 'Anthropic',
-            'supports_tools': True,
+            'supports_tools': False,
             'context_window': 200000,
             'type': 'Pay-per-token',
         },
@@ -156,7 +156,7 @@ async def list_available_models() -> Dict[str, Any]:
         },
     ]
 
-    return {'models': models, 'default': 'databricks-meta-llama-3-3-70b-instruct'}
+    return {'models': models, 'default': 'databricks-claude-sonnet-4'}  # Claude Sonnet 4 is the best
 
 
 def convert_mcp_tools_to_openai_format(mcp_tools: List[Any]) -> List[Dict[str, Any]]:
@@ -261,7 +261,19 @@ async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any]) -> Dict[st
         if hasattr(mcp, '_tool_manager'):
             # Call the tool with the provided arguments
             result = await mcp._tool_manager.call_tool(tool_name, tool_args)
-            return result.model_dump() if hasattr(result, 'model_dump') else result
+
+            # Convert ToolResult to dictionary
+            if hasattr(result, 'model_dump'):
+                return result.model_dump()
+            elif hasattr(result, 'content'):
+                # FastMCP ToolResult has content attribute
+                return {
+                    'content': result.content,
+                    'isError': getattr(result, 'isError', False)
+                }
+            else:
+                # Fallback to dict conversion
+                return dict(result) if hasattr(result, '__dict__') else {'result': str(result)}
     except Exception as e:
         return {'error': str(e), 'tool_name': tool_name, 'status': 'failed'}
 
@@ -364,12 +376,15 @@ async def send_chat_message(request: ChatRequest) -> ChatResponse:
 
 
 @router.post('/execute-tool')
-async def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_tool_endpoint(
+    tool_name: str = Query(..., description='Name of the tool to execute'),
+    tool_args: Dict[str, Any] = Body(..., description='Arguments for the tool')
+) -> Dict[str, Any]:
     """Execute an MCP tool and return the result.
 
     Args:
-        tool_name: Name of the tool to execute
-        tool_args: Arguments for the tool
+        tool_name: Name of the tool to execute (from query parameter)
+        tool_args: Arguments for the tool (from request body)
 
     Returns:
         Tool execution result

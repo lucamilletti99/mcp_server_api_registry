@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChatPage } from "./pages/ChatPage";
+import { ChatPageAgent } from "./pages/ChatPageAgent";
 import { PromptsPage } from "./pages/PromptsPage";
 import { MessageSquare, FileCode, Moon, Sun } from "lucide-react";
 import {
@@ -85,7 +85,7 @@ function App() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "chat" ? <ChatPage /> : <PromptsPage />}
+        {activeTab === "chat" ? <ChatPageAgent /> : <PromptsPage />}
       </div>
     </div>
   );
