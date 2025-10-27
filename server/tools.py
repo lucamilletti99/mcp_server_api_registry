@@ -2,10 +2,11 @@
 
 import json
 import os
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, List
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 from databricks.sdk import WorkspaceClient
@@ -152,6 +153,158 @@ def _analyze_api_capabilities(data: Dict) -> Dict:
     capabilities['error'] = f'Analysis error: {str(e)}'
 
   return capabilities
+
+
+def _fetch_api_documentation(url: str, timeout: int = 10) -> Dict:
+  """Fetch and parse API documentation from a URL.
+
+  Args:
+      url: URL of the API documentation page
+      timeout: Request timeout in seconds
+
+  Returns:
+      Dictionary with documentation content and extracted endpoints
+  """
+  try:
+    print(f'📚 Fetching API documentation from: {url}')
+    response = requests.get(url, timeout=timeout)
+
+    if response.status_code != 200:
+      return {
+        'success': False,
+        'error': f'Failed to fetch documentation (status {response.status_code})'
+      }
+
+    content = response.text
+
+    # Extract common API patterns from documentation
+    endpoints = []
+
+    # Look for URL patterns (http/https URLs)
+    url_pattern = r'https?://[^\s<>"\']+(?:/[^\s<>"\']*)?'
+    found_urls = re.findall(url_pattern, content)
+
+    # Look for API endpoint paths
+    path_pattern = r'/api/[^\s<>"\']+|/v\d+/[^\s<>"\']+|/[a-z_]+/[a-z_]+'
+    found_paths = re.findall(path_pattern, content)
+
+    # Look for parameter names (common API parameter patterns)
+    param_patterns = ['apikey', 'api_key', 'token', 'function', 'symbol', 'query']
+    found_params = []
+    for param in param_patterns:
+      if param in content.lower():
+        found_params.append(param)
+
+    # Extract code examples (often in <code>, <pre>, or ``` blocks)
+    code_pattern = r'<code>(.*?)</code>|<pre>(.*?)</pre>|```(.*?)```'
+    code_examples = re.findall(code_pattern, content, re.DOTALL)
+
+    return {
+      'success': True,
+      'url': url,
+      'content_preview': content[:1000],
+      'found_urls': list(set(found_urls))[:10],
+      'found_paths': list(set(found_paths))[:10],
+      'found_params': found_params,
+      'code_examples_count': len(code_examples),
+      'content_length': len(content)
+    }
+
+  except Exception as e:
+    print(f'❌ Error fetching documentation: {str(e)}')
+    return {'success': False, 'error': f'Error: {str(e)}'}
+
+
+def _try_common_endpoint_patterns(
+  base_url: str, api_key: str = None, timeout: int = 10
+) -> Dict:
+  """Try common API endpoint patterns to discover working endpoints.
+
+  Args:
+      base_url: Base URL of the API (e.g., 'https://api.example.com')
+      api_key: Optional API key for authentication
+      timeout: Request timeout in seconds
+
+  Returns:
+      Dictionary with successful endpoints found
+  """
+  try:
+    parsed = urlparse(base_url)
+    base = f'{parsed.scheme}://{parsed.netloc}'
+
+    # Common API endpoint patterns
+    patterns = [
+      '',  # Base URL itself
+      '/api',
+      '/api/v1',
+      '/api/v2',
+      '/v1',
+      '/v2',
+      '/search',
+      '/query',
+      '/data',
+      '/status',
+      '/health',
+      '/docs',
+      '/swagger',
+    ]
+
+    successful_endpoints = []
+
+    print(f'🔍 Trying common endpoint patterns for: {base}')
+
+    for pattern in patterns:
+      test_url = base + pattern
+
+      # Try different auth methods
+      auth_attempts = [
+        {'headers': {}, 'params': {}},  # No auth
+      ]
+
+      if api_key:
+        auth_attempts.extend([
+          {'headers': {'Authorization': f'Bearer {api_key}'}, 'params': {}},
+          {'headers': {'X-API-Key': api_key}, 'params': {}},
+          {'headers': {}, 'params': {'apikey': api_key}},
+          {'headers': {}, 'params': {'api_key': api_key}},
+        ])
+
+      for attempt in auth_attempts:
+        try:
+          response = requests.get(
+            test_url,
+            headers=attempt['headers'],
+            params=attempt['params'],
+            timeout=timeout
+          )
+
+          if response.status_code == 200:
+            try:
+              data = response.json()
+              successful_endpoints.append({
+                'url': test_url,
+                'status_code': 200,
+                'auth_method': 'authenticated' if api_key and attempt['headers'] else 'none',
+                'response_preview': json.dumps(data, indent=2)[:300]
+              })
+              print(f'✅ Found working endpoint: {test_url}')
+              break  # Stop trying other auth methods for this pattern
+            except Exception:
+              # Not JSON, skip
+              pass
+        except Exception:
+          continue
+
+    return {
+      'success': True,
+      'base_url': base,
+      'successful_endpoints': successful_endpoints,
+      'count': len(successful_endpoints)
+    }
+
+  except Exception as e:
+    print(f'❌ Error trying patterns: {str(e)}')
+    return {'success': False, 'error': f'Error: {str(e)}'}
 
 
 def _validate_api_endpoint(
@@ -810,3 +963,162 @@ VALUES (
     except Exception as e:
       print(f'❌ Error listing DBFS files: {str(e)}')
       return {'success': False, 'error': f'Error: {str(e)}', 'files': [], 'count': 0}
+
+  @mcp_server.tool
+  def fetch_api_documentation(documentation_url: str, timeout: int = 10) -> dict:
+    """Fetch and parse API documentation from a URL.
+
+    This tool automatically fetches API documentation pages and extracts
+    useful information like endpoint URLs, parameters, and code examples.
+    Use this when the user provides a documentation link.
+
+    Args:
+        documentation_url: URL of the API documentation page
+        timeout: Request timeout in seconds (default: 10)
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating if fetch succeeded
+        - content_preview: Preview of documentation content
+        - found_urls: List of API URLs found in the documentation
+        - found_paths: List of API endpoint paths found
+        - found_params: List of common parameter names found
+        - code_examples_count: Number of code examples in the docs
+    """
+    return _fetch_api_documentation(documentation_url, timeout)
+
+  @mcp_server.tool
+  def try_common_api_patterns(base_url: str, api_key: str = None, timeout: int = 10) -> dict:
+    """Try common API endpoint patterns to discover working endpoints.
+
+    This tool automatically tests common API patterns like /api, /v1, /search, etc.
+    with different authentication methods to find working endpoints.
+
+    Args:
+        base_url: Base URL of the API (e.g., 'https://api.example.com')
+        api_key: Optional API key for authentication
+        timeout: Request timeout in seconds (default: 10)
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating if search succeeded
+        - successful_endpoints: List of working endpoints found
+        - count: Number of working endpoints discovered
+    """
+    return _try_common_endpoint_patterns(base_url, api_key, timeout)
+
+  @mcp_server.tool
+  def smart_register_api(
+    api_name: str,
+    description: str,
+    endpoint_url: str,
+    warehouse_id: str,
+    api_key: str = None,
+    documentation_url: str = None,
+  ) -> dict:
+    """Smart one-step API registration with automatic discovery and validation.
+
+    This tool simplifies the API registration process by:
+    1. Optionally fetching documentation if provided
+    2. Automatically trying common endpoint patterns
+    3. Testing multiple authentication methods
+    4. Discovering the best working configuration
+    5. Registering the API in one step
+
+    Use this tool to register an API with minimal user input required.
+
+    Args:
+        api_name: Unique name for the API (e.g., "sec_api_search")
+        description: Description of what the API does
+        endpoint_url: Base URL or specific endpoint URL to try
+        warehouse_id: SQL warehouse ID for database operations
+        api_key: Optional API key (will try multiple auth methods)
+        documentation_url: Optional documentation URL to fetch additional info
+
+    Returns:
+        Dictionary with registration results and discovery insights
+    """
+    try:
+      print(f'🚀 Smart registration starting for: {api_name}')
+
+      # Step 1: Fetch documentation if provided
+      doc_insights = None
+      if documentation_url:
+        print(f'📚 Fetching documentation...')
+        doc_result = _fetch_api_documentation(documentation_url)
+        if doc_result.get('success'):
+          doc_insights = {
+            'urls_found': len(doc_result.get('found_urls', [])),
+            'params_found': doc_result.get('found_params', []),
+          }
+
+      # Step 2: Try common patterns to find working endpoints
+      print(f'🔍 Discovering working endpoints...')
+      pattern_result = _try_common_endpoint_patterns(endpoint_url, api_key)
+
+      working_endpoint = None
+      auth_method = 'none'
+      final_api_key = ''
+
+      if pattern_result.get('success') and pattern_result.get('successful_endpoints'):
+        # Use the first successful endpoint found
+        best_endpoint = pattern_result['successful_endpoints'][0]
+        working_endpoint = best_endpoint['url']
+        auth_method = 'api_key' if best_endpoint['auth_method'] == 'authenticated' else 'none'
+        final_api_key = api_key if auth_method == 'api_key' else ''
+
+        print(f'✅ Found working endpoint: {working_endpoint}')
+      else:
+        # No patterns worked, try the original endpoint with discovery
+        print(f'🔍 Trying original endpoint with discovery...')
+        discovery_result = discover_api_endpoint(endpoint_url, api_key)
+
+        if discovery_result.get('success') and discovery_result.get('status_code') == 200:
+          working_endpoint = endpoint_url
+          if discovery_result.get('auth_detected', {}).get('authenticated'):
+            auth_method = 'api_key'
+            final_api_key = api_key or ''
+        else:
+          # Still register it, but as pending
+          working_endpoint = endpoint_url
+          if api_key:
+            auth_method = 'api_key'
+            final_api_key = api_key
+
+      # Step 3: Register the API
+      print(f'📝 Registering API in registry...')
+      registration_result = register_api_in_registry(
+        api_name=api_name,
+        description=description,
+        api_endpoint=working_endpoint,
+        warehouse_id=warehouse_id,
+        http_method='GET',
+        auth_type=auth_method,
+        token_info=final_api_key,
+        request_params='{}',
+        validate_after_register=True,
+      )
+
+      # Add discovery insights to the result
+      if registration_result.get('success'):
+        registration_result['discovery_insights'] = {
+          'documentation_fetched': doc_insights is not None,
+          'doc_insights': doc_insights,
+          'patterns_tried': pattern_result.get('count', 0),
+          'working_endpoints_found': len(pattern_result.get('successful_endpoints', [])),
+          'auth_method_used': auth_method,
+          'final_endpoint': working_endpoint,
+        }
+
+      return registration_result
+
+    except Exception as e:
+      print(f'❌ Error in smart registration: {str(e)}')
+      return {
+        'success': False,
+        'error': f'Smart registration error: {str(e)}',
+        'next_steps': [
+          'Try using register_api_in_registry directly with exact endpoint URL',
+          'Use discover_api_endpoint first to validate the endpoint',
+        ],
+      }

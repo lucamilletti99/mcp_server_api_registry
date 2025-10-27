@@ -597,14 +597,15 @@ export function ChatPageAgent() {
       <Dialog>
         <DialogTrigger asChild>
           <button
-            className={`fixed bottom-6 left-6 z-20 w-14 h-14 rounded-full shadow-lg transition-all duration-300 hover:scale-110 ${
+            className={`fixed bottom-6 left-6 z-20 flex items-center gap-3 px-4 py-3 rounded-full shadow-lg transition-all duration-300 hover:scale-105 ${
               isDark
                 ? "bg-white/10 border border-white/20 text-white hover:bg-white/20"
                 : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
-            } backdrop-blur-md flex items-center justify-center`}
+            } backdrop-blur-md`}
             title="Help & FAQ"
           >
             <HelpCircle className="h-6 w-6" />
+            <span className="text-sm font-medium">User Guide</span>
           </button>
         </DialogTrigger>
         <DialogContent className={`max-w-2xl max-h-[80vh] overflow-y-auto ${
