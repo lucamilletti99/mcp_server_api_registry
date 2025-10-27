@@ -19,10 +19,19 @@ import {
   Home,
   Plus,
   Wrench,
+  HelpCircle,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Model {
   id: string;
@@ -583,6 +592,96 @@ export function ChatPageAgent() {
           </div>
         </div>
       )}
+
+      {/* FAQ/Help Button - Bottom Left */}
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            className={`fixed bottom-6 left-6 z-20 w-14 h-14 rounded-full shadow-lg transition-all duration-300 hover:scale-110 ${
+              isDark
+                ? "bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
+            } backdrop-blur-md flex items-center justify-center`}
+            title="Help & FAQ"
+          >
+            <HelpCircle className="h-6 w-6" />
+          </button>
+        </DialogTrigger>
+        <DialogContent className={`max-w-2xl max-h-[80vh] overflow-y-auto ${
+          isDark ? "bg-gray-900 text-white border-white/20" : "bg-white text-gray-900"
+        }`}>
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">How to Use the API Registry Agent</DialogTitle>
+            <DialogDescription className={isDark ? "text-gray-400" : "text-gray-600"}>
+              Your AI-powered assistant for managing and testing APIs
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 mt-4">
+            <section>
+              <h3 className="text-lg font-semibold mb-2">🚀 Getting Started</h3>
+              <p className={isDark ? "text-gray-300" : "text-gray-700"}>
+                The API Registry Agent uses MCP (Model Context Protocol) tools to help you discover, register, query, and test API endpoints. Simply chat with the agent using natural language!
+              </p>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-semibold mb-2">🎯 Quick Actions</h3>
+              <p className={isDark ? "text-gray-300 mb-2" : "text-gray-700 mb-2"}>
+                Use the quick action buttons for common tasks:
+              </p>
+              <ul className={`list-disc list-inside space-y-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                <li><strong>Discover:</strong> Find and explore new APIs from the web</li>
+                <li><strong>Register:</strong> Add APIs to your centralized registry</li>
+                <li><strong>Query:</strong> Check what APIs are in your registry</li>
+                <li><strong>Test:</strong> Verify API health and functionality</li>
+                <li><strong>Tools:</strong> See all available MCP tools</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-semibold mb-2">💬 Example Prompts</h3>
+              <ul className={`list-disc list-inside space-y-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                <li>"Discover APIs related to weather data"</li>
+                <li>"Register the API at https://api.example.com"</li>
+                <li>"What APIs are in my registry?"</li>
+                <li>"Test if my weather API is healthy"</li>
+                <li>"Execute a SQL query to count all registered APIs"</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-semibold mb-2">🛠️ Available Tools</h3>
+              <ul className={`list-disc list-inside space-y-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                <li><strong>discover_api_endpoint:</strong> Search and discover new APIs</li>
+                <li><strong>register_api_in_registry:</strong> Add APIs to the registry</li>
+                <li><strong>check_api_registry:</strong> View registered APIs</li>
+                <li><strong>call_api_endpoint:</strong> Make requests to APIs</li>
+                <li><strong>execute_dbsql:</strong> Run SQL queries on Databricks</li>
+                <li><strong>list_warehouses:</strong> List SQL warehouses</li>
+                <li><strong>list_dbfs_files:</strong> Browse DBFS files</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-semibold mb-2">⚙️ Custom System Prompt</h3>
+              <p className={isDark ? "text-gray-300" : "text-gray-700"}>
+                Click the "Add System Prompt" button on the right edge to customize the agent's behavior and role for your specific use case.
+              </p>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-semibold mb-2">✨ Features</h3>
+              <ul className={`list-disc list-inside space-y-1 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                <li>Markdown rendering for formatted responses</li>
+                <li>Real-time tool execution tracking</li>
+                <li>Model selection (Claude, Llama, etc.)</li>
+                <li>Dark/Light theme toggle</li>
+                <li>Conversation history management</li>
+              </ul>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
