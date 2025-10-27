@@ -127,3 +127,15 @@
 .typing-indicator {
   animation: typing-dots 1.5s ease-in-out infinite;
 }
+
+/* Floating action buttons animation */
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

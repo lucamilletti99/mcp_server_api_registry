@@ -67,6 +67,7 @@ class AgentChatRequest(BaseModel):
     messages: List[ChatMessage]
     model: str = 'databricks-claude-sonnet-4'  # Claude Sonnet 4 (best model for tool calling)
     max_tokens: int = 4096
+    system_prompt: Optional[str] = None  # Optional custom system prompt
 
 
 class AgentChatResponse(BaseModel):
@@ -166,8 +167,16 @@ async def call_foundation_model(
         payload["tools"] = tools
 
     # Log the request payload for debugging
-    print(f"[Model Call] Sending {len(messages)} messages, {len(tools) if tools else 0} tools")
-    print(f"[Model Call] Last message: {messages[-1] if messages else 'none'}")
+    import sys
+    print(f"[Model Call] Sending {len(messages)} messages, {len(tools) if tools else 0} tools", flush=True)
+    print(f"[Model Call] Messages structure:", flush=True)
+    for i, msg in enumerate(messages):
+        role = msg.get('role')
+        content_preview = str(msg.get('content', ''))[:100] if 'content' in msg else 'N/A'
+        has_tool_calls = 'tool_calls' in msg
+        has_tool_call_id = 'tool_call_id' in msg
+        print(f"  [{i}] role={role}, content_preview={content_preview}, has_tool_calls={has_tool_calls}, has_tool_call_id={has_tool_call_id}", flush=True)
+    sys.stdout.flush()
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -248,7 +257,8 @@ async def run_agent_loop(
     model: str,
     tools: List[Dict[str, Any]],
     max_iterations: int = 10,
-    request: Request = None
+    request: Request = None,
+    custom_system_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run the agentic loop.
 
@@ -260,11 +270,41 @@ async def run_agent_loop(
         tools: Available tools
         max_iterations: Max agent iterations
         request: FastAPI Request object for on-behalf-of auth
+        custom_system_prompt: Optional custom system prompt from user
 
     Returns:
         Final response with traces
     """
-    messages = user_messages.copy()
+    # Use custom system prompt if provided, otherwise use default
+    if custom_system_prompt:
+        system_prompt = custom_system_prompt
+    else:
+        # Default system prompt to set the context and role for the agent
+        system_prompt = """You are an API Registry Agent powered by MCP (Model Context Protocol) tools. Your role is to help users discover, register, query, and test API endpoints.
+
+You have access to the following capabilities through MCP tools:
+- **discover_api_endpoint**: Search and discover new APIs from the web
+- **register_api_in_registry**: Register APIs in the centralized registry
+- **check_api_registry**: Query the registry to see all registered APIs
+- **call_api_endpoint**: Make requests to registered API endpoints
+- **execute_dbsql**: Execute SQL queries against Databricks
+- **list_warehouses**: List available SQL warehouses
+- **list_dbfs_files**: Browse DBFS file system
+- **health**: Check system health status
+
+When helping users:
+1. Be proactive in using the appropriate tools to complete their requests
+2. Explain what you're doing and which tools you're using
+3. If you need to discover an API, use discover_api_endpoint first
+4. After discovering an API, offer to register it in the registry
+5. When testing APIs, use call_api_endpoint to verify they work
+6. Be clear and concise in your responses
+7. If you encounter errors, explain them clearly and suggest next steps
+
+You are helpful, efficient, and knowledgeable about APIs and data integration."""
+
+    # Prepend system message to conversation
+    messages = [{"role": "system", "content": system_prompt}] + user_messages.copy()
     traces = []
 
     for iteration in range(max_iterations):
@@ -284,19 +324,91 @@ async def run_agent_loop(
         print(f"[Agent Loop] Model response - finish_reason: {finish_reason}")
         print(f"[Agent Loop] Message keys: {list(message.keys())}")
 
-        # Check for tool calls
-        tool_calls = message.get('tool_calls')
-        print(f"[Agent Loop] Tool calls: {len(tool_calls) if tool_calls else 0}")
+        # Check for Claude-style tool_use in content
+        content = message.get('content', '')
+        tool_use_blocks = []
+        if isinstance(content, list):
+            tool_use_blocks = [item for item in content if isinstance(item, dict) and item.get('type') == 'tool_use']
 
-        if tool_calls:
-            # All models use OpenAI format for requests to Databricks API
+        # Check for OpenAI-style tool_calls
+        tool_calls = message.get('tool_calls')
+
+        print(f"[Agent Loop] Tool calls: {len(tool_calls) if tool_calls else 0}")
+        print(f"[Agent Loop] Tool use blocks: {len(tool_use_blocks)}")
+
+        if tool_use_blocks:
+            # Claude format: content contains tool_use blocks
+            # BUT Databricks requires OpenAI format in requests even for Claude models
+            print(f"[Agent Loop] Processing Claude tool_use blocks (converting to OpenAI format)")
+
+            # Convert Claude tool_use to OpenAI tool_calls format for the request
+            tool_calls_openai = []
+            for i, tool_use in enumerate(tool_use_blocks):
+                tool_calls_openai.append({
+                    "id": tool_use.get('id'),
+                    "type": "function",
+                    "function": {
+                        "name": tool_use.get('name'),
+                        "arguments": json.dumps(tool_use.get('input', {}))
+                    }
+                })
+
+            # Add assistant message in OpenAI format (required by Databricks)
+            assistant_msg = {
+                "role": "assistant",
+                "tool_calls": tool_calls_openai
+            }
+            # Include text content if present (not just tool_use blocks)
+            text_content = ""
+            if isinstance(content, list):
+                text_blocks = [item.get('text', '') for item in content if isinstance(item, dict) and item.get('type') == 'text']
+                text_content = ''.join(text_blocks)
+            if text_content:
+                assistant_msg["content"] = text_content
+
+            messages.append(assistant_msg)
+
+            # Execute each tool and add results in OpenAI format
+            for tool_use in tool_use_blocks:
+                tool_name = tool_use.get('name')
+                tool_args = tool_use.get('input', {})
+                tool_id = tool_use.get('id')
+
+                print(f"[Agent Loop] Executing tool: {tool_name}")
+
+                # Execute via MCP
+                result = await execute_mcp_tool(tool_name, tool_args)
+
+                # Ensure result is not empty
+                if not result or result.strip() == "":
+                    result = f"Tool {tool_name} completed successfully (no output)"
+
+                # Add tool result in OpenAI format (required by Databricks)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": result
+                })
+
+                traces.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": result
+                })
+
+        elif tool_calls:
+            # OpenAI/GPT format: tool_calls array
+            print(f"[Agent Loop] Processing OpenAI tool_calls")
+
+            # IMPORTANT: Do NOT include content when tool_calls are present!
+            # Claude includes tool_use blocks in content which conflicts with tool_calls format
             assistant_msg = {
                 "role": "assistant",
                 "tool_calls": tool_calls
             }
-            # Only include content if it's actually present and non-empty
-            if message.get('content'):
-                assistant_msg["content"] = message.get('content')
+            # Note: Intentionally NOT including content field even if present
+            # because it may contain Claude-formatted tool_use blocks
 
             messages.append(assistant_msg)
 
@@ -372,7 +484,8 @@ async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentC
             model=chat_request.model,
             tools=tools,
             max_iterations=10,
-            request=request
+            request=request,
+            custom_system_prompt=chat_request.system_prompt
         )
 
         return AgentChatResponse(
@@ -382,6 +495,10 @@ async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentC
         )
 
     except Exception as e:
+        # Log the full exception for debugging
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"[Agent Chat Error] {error_traceback}", flush=True)
         raise HTTPException(
             status_code=500,
             detail=f'Agent chat failed: {str(e)}'

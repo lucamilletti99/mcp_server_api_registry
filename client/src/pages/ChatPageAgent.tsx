@@ -16,8 +16,12 @@ import {
   Search,
   TestTube,
   FileJson,
+  Home,
+  Plus,
+  Wrench,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
+import DOMPurify from "dompurify";
 
 interface Model {
   id: string;
@@ -44,6 +48,9 @@ export function ChatPageAgent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState<string>("");
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [tempSystemPrompt, setTempSystemPrompt] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
@@ -93,6 +100,7 @@ export function ChatPageAgent() {
         body: JSON.stringify({
           messages: [...messages.map(m => ({ role: m.role, content: m.content })), userMessage],
           model: selectedModel,
+          system_prompt: systemPrompt || undefined, // Include custom system prompt if set
         }),
       });
 
@@ -147,6 +155,30 @@ export function ChatPageAgent() {
     }
   };
 
+  const resetChat = () => {
+    setMessages([]);
+    setInput("");
+  };
+
+  const handleOpenSystemPrompt = () => {
+    setTempSystemPrompt(systemPrompt);
+    setShowSystemPrompt(true);
+  };
+
+  const handleSaveSystemPrompt = () => {
+    setSystemPrompt(tempSystemPrompt);
+    setShowSystemPrompt(false);
+  };
+
+  const handleCancelSystemPrompt = () => {
+    setTempSystemPrompt(systemPrompt);
+    setShowSystemPrompt(false);
+  };
+
+  const handleResetSystemPrompt = () => {
+    setTempSystemPrompt("");
+  };
+
   const suggestedActions = [
     {
       icon: <Search className="h-4 w-4" />,
@@ -168,6 +200,11 @@ export function ChatPageAgent() {
       label: "Test",
       prompt: "Test if my registered API is still healthy",
     },
+    {
+      icon: <Wrench className="h-4 w-4" />,
+      label: "Tools",
+      prompt: "What tools do I have available?",
+    },
   ];
 
   const isDark = theme === "dark";
@@ -186,7 +223,7 @@ export function ChatPageAgent() {
       } backdrop-blur-sm border-b ${
         isDark ? "border-white/10" : "border-gray-200"
       }`}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Sparkles className={`h-5 w-5 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
           <span className={`font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
             API Registry Agent
@@ -194,6 +231,21 @@ export function ChatPageAgent() {
           <span className={`text-xs px-2 py-1 rounded ${isDark ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
             MCP Powered
           </span>
+          {messages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetChat}
+              className={`gap-2 ${
+                isDark
+                  ? "bg-white/5 border-white/20 text-white hover:bg-white/10"
+                  : "bg-white border-gray-300 text-gray-900 hover:bg-gray-100"
+              }`}
+            >
+              <Home className="h-4 w-4" />
+              New Chat
+            </Button>
+          )}
         </div>
         <div>
           <Select value={selectedModel} onValueChange={setSelectedModel}>
@@ -234,6 +286,7 @@ export function ChatPageAgent() {
           </Select>
         </div>
       </div>
+
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
@@ -322,9 +375,15 @@ export function ChatPageAgent() {
                       : "bg-white text-gray-900 border border-gray-200"
                   }`}
                 >
-                  <div className={`whitespace-pre-wrap break-words ${message.content === "Thinking..." ? "typing-indicator" : ""}`}>
-                    {message.content}
-                  </div>
+                  <div
+                    className={`whitespace-pre-wrap break-words ${message.content === "Thinking..." ? "typing-indicator" : ""}`}
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(message.content, {
+                        ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+                        ALLOWED_ATTR: ['href', 'target', 'class', 'style']
+                      })
+                    }}
+                  />
                   {message.tool_calls && message.tool_calls.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {message.tool_calls.map((toolCall, tcIndex) => (
@@ -368,6 +427,99 @@ export function ChatPageAgent() {
         )}
       </div>
 
+      {/* System Prompt Trigger Button - Fixed on Right Edge */}
+      <button
+        onClick={handleOpenSystemPrompt}
+        onMouseEnter={() => setShowSystemPrompt(true)}
+        className={`fixed right-0 top-1/2 -translate-y-1/2 z-20 px-2 py-6 rounded-l-lg shadow-lg transition-all duration-300 ${
+          isDark
+            ? "bg-white/10 border-l border-t border-b border-white/20 text-white hover:bg-white/20"
+            : "bg-white border-l border-t border-b border-gray-200 text-gray-900 hover:bg-gray-50"
+        } backdrop-blur-md flex items-center gap-2 text-sm writing-mode-vertical`}
+        style={{ writingMode: 'vertical-rl' }}
+      >
+        <Plus className="h-4 w-4" />
+        <span>{systemPrompt ? "Edit System Prompt" : "Add System Prompt"}</span>
+      </button>
+
+      {/* System Prompt Panel - Slides from Right */}
+      <div
+        className={`fixed right-0 top-0 h-full w-96 z-30 transition-transform duration-300 ${
+          showSystemPrompt ? "translate-x-0" : "translate-x-full"
+        } ${
+          isDark ? "bg-black/90" : "bg-white/95"
+        } backdrop-blur-lg border-l ${
+          isDark ? "border-white/20" : "border-gray-200"
+        } shadow-2xl`}
+        onMouseLeave={() => !tempSystemPrompt && setShowSystemPrompt(false)}
+      >
+        <div className="flex flex-col h-full p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className={`text-lg font-semibold ${
+              isDark ? "text-white" : "text-gray-900"
+            }`}>
+              System Prompt
+            </h3>
+            <button
+              onClick={handleCancelSystemPrompt}
+              className={`p-2 rounded-lg transition-colors ${
+                isDark
+                  ? "hover:bg-white/10 text-white"
+                  : "hover:bg-gray-100 text-gray-900"
+              }`}
+            >
+              <span className="text-xl">&times;</span>
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col gap-4">
+            <label className={`text-sm font-medium ${
+              isDark ? "text-white/80" : "text-gray-700"
+            }`}>
+              Customize the agent's behavior and role:
+            </label>
+            <Textarea
+              value={tempSystemPrompt}
+              onChange={(e) => setTempSystemPrompt(e.target.value)}
+              placeholder="Optionally override the system prompt. Define the agent's role, capabilities, and behavior here..."
+              className={`flex-1 ${
+                isDark
+                  ? "bg-white/5 border-blue-400/50 text-white placeholder:text-white/40 focus:border-blue-400"
+                  : "bg-white border-blue-500/50 text-gray-900 placeholder:text-gray-400 focus:border-blue-500"
+              } resize-none`}
+            />
+          </div>
+
+          <div className={`flex items-center justify-end gap-2 mt-6 pt-6 border-t ${
+            isDark ? "border-white/20" : "border-gray-200"
+          }`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetSystemPrompt}
+              className={isDark ? "text-blue-400 hover:text-blue-300 hover:bg-white/10" : "text-blue-600 hover:text-blue-700"}
+            >
+              Reset
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancelSystemPrompt}
+              className={isDark ? "border-white/20 text-white hover:bg-white/10" : ""}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveSystemPrompt}
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Bottom Input (shown when in conversation) */}
       {messages.length > 0 && (
         <div className={`p-4 ${
@@ -375,32 +527,55 @@ export function ChatPageAgent() {
         } backdrop-blur-sm border-t ${
           isDark ? "border-white/10" : "border-gray-200"
         }`}>
-          <div className="max-w-4xl mx-auto relative">
-            <Textarea
-              ref={textareaRef}
-              placeholder="Continue the conversation..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className={`min-h-[60px] pr-14 ${
-                isDark
-                  ? "bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                  : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
-              } backdrop-blur-md resize-none shadow-lg`}
-              disabled={loading}
-            />
-            <Button
-              onClick={sendMessage}
-              disabled={loading || !input.trim()}
-              size="icon"
-              className="absolute bottom-3 right-3 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
-            >
-              {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
+          <div className="max-w-4xl mx-auto">
+            {/* Quick Action Buttons - Horizontal row above input */}
+            <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-2">
+              {suggestedActions.map((action, index) => (
+                <button
+                  key={action.label}
+                  onClick={() => setInput(action.prompt)}
+                  className={`group flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 whitespace-nowrap ${
+                    isDark
+                      ? "bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                      : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
+                  } backdrop-blur-md shadow-md`}
+                  style={{
+                    animation: `fadeInRight 0.3s ease-out ${index * 0.1}s both`,
+                  }}
+                >
+                  {action.icon}
+                  <span className="text-sm font-medium">{action.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="relative">
+              <Textarea
+                ref={textareaRef}
+                placeholder="Continue the conversation..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className={`min-h-[60px] pr-14 ${
+                  isDark
+                    ? "bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                    : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
+                } backdrop-blur-md resize-none shadow-lg`}
+                disabled={loading}
+              />
+              <Button
+                onClick={sendMessage}
+                disabled={loading || !input.trim()}
+                size="icon"
+                className="absolute bottom-3 right-3 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
+              >
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       )}
