@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ChatPageAgent } from "./pages/ChatPageAgent";
 import { PromptsPage } from "./pages/PromptsPage";
-import { MessageSquare, FileCode, Moon, Sun } from "lucide-react";
+import { TracesPage } from "./pages/TracesPage";
+import { MessageSquare, FileCode, Moon, Sun, Activity } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,15 +14,21 @@ import { useTheme } from "./components/theme-provider";
 
 function App() {
   const [activeTab, setActiveTab] = useState("chat");
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
 
   const isDark = theme === "dark";
 
+  const handleViewTrace = (traceId: string) => {
+    setSelectedTraceId(traceId);
+    setActiveTab("traces");
+  };
+
   return (
-    <div className={`h-screen flex flex-col ${isDark ? "bg-[#0a1929]" : "bg-gray-50"}`}>
+    <div className={`h-screen flex flex-col ${isDark ? "bg-[#1C3D42]" : "bg-gray-50"}`}>
       {/* Universal Top Banner */}
       <div className={`flex items-center justify-between px-6 py-3 ${
-        isDark ? "bg-[#0d1f2d]" : "bg-white"
+        isDark ? "bg-[#16343A]" : "bg-white"
       } border-b ${isDark ? "border-white/10" : "border-gray-200"}`}>
         {/* Tab Navigation */}
         <div className="flex items-center gap-1">
@@ -55,6 +62,21 @@ function App() {
             <FileCode className="h-4 w-4" />
             MCP Info
           </button>
+          <button
+            onClick={() => setActiveTab("traces")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              activeTab === "traces"
+                ? isDark
+                  ? "bg-white/10 text-white"
+                  : "bg-gray-100 text-gray-900"
+                : isDark
+                ? "text-white/60 hover:text-white/80 hover:bg-white/5"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <Activity className="h-4 w-4" />
+            Traces
+          </button>
         </div>
 
         {/* Theme Selector */}
@@ -85,7 +107,13 @@ function App() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "chat" ? <ChatPageAgent /> : <PromptsPage />}
+        {activeTab === "chat" ? (
+          <ChatPageAgent onViewTrace={handleViewTrace} />
+        ) : activeTab === "mcp-info" ? (
+          <PromptsPage />
+        ) : (
+          <TracesPage initialTraceId={selectedTraceId} />
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,7 @@ import {
   Plus,
   Wrench,
   HelpCircle,
+  Activity,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import DOMPurify from "dompurify";
@@ -50,9 +51,14 @@ interface Message {
     args: any;
     result: any;
   }>;
+  trace_id?: string; // MLflow trace ID for "View Trace" link
 }
 
-export function ChatPageAgent() {
+interface ChatPageAgentProps {
+  onViewTrace?: (traceId: string) => void;
+}
+
+export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -138,6 +144,7 @@ export function ChatPageAgent() {
           role: "assistant",
           content: data.response,
           tool_calls: data.tool_calls, // Show which tools were used
+          trace_id: data.trace_id, // MLflow trace ID for "View Trace" link
         },
       ]);
 
@@ -223,8 +230,8 @@ export function ChatPageAgent() {
     <div
       className={`flex flex-col h-full ${
         isDark
-          ? "bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]"
-          : "bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50"
+          ? "bg-gradient-to-br from-[#1C3D42] via-[#24494F] to-[#2C555C]"
+          : "bg-gradient-to-br from-gray-50 via-white to-gray-100"
       } transition-all duration-500`}
     >
       {/* Top Bar */}
@@ -234,11 +241,11 @@ export function ChatPageAgent() {
         isDark ? "border-white/10" : "border-gray-200"
       }`}>
         <div className="flex items-center gap-3">
-          <Sparkles className={`h-5 w-5 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
+          <Sparkles className={`h-5 w-5 ${isDark ? "text-[#FF8A80]" : "text-[#FF3621]"}`} />
           <span className={`font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
             API Registry Agent
           </span>
-          <span className={`text-xs px-2 py-1 rounded ${isDark ? "bg-blue-500/20 text-blue-300" : "bg-blue-100 text-blue-700"}`}>
+          <span className={`text-xs px-2 py-1 rounded ${isDark ? "bg-[#FF3621]/20 text-[#FF8A80]" : "bg-[#FF3621]/10 text-[#FF3621]"}`}>
             MCP Powered
           </span>
           {messages.length > 0 && (
@@ -330,7 +337,7 @@ export function ChatPageAgent() {
                       ? "bg-white/10 border-white/20 text-white placeholder:text-white/60"
                       : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
                   } backdrop-blur-md resize-none focus:ring-2 ${
-                    isDark ? "focus:ring-blue-400" : "focus:ring-blue-500"
+                    isDark ? "focus:ring-[#FF3621]" : "focus:ring-[#FF3621]"
                   } transition-all shadow-lg`}
                   disabled={loading}
                 />
@@ -338,7 +345,7 @@ export function ChatPageAgent() {
                   onClick={sendMessage}
                   disabled={loading || !input.trim()}
                   size="lg"
-                  className="absolute bottom-4 right-4 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
+                  className="absolute bottom-4 right-4 rounded-full bg-[#FF3621] hover:bg-[#E02E1A] text-white shadow-lg"
                 >
                   {loading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -379,7 +386,7 @@ export function ChatPageAgent() {
                 <div
                   className={`max-w-[80%] rounded-2xl px-6 py-4 shadow-lg ${
                     message.role === "user"
-                      ? "bg-blue-500 text-white"
+                      ? "bg-[#FF3621] text-white"
                       : isDark
                       ? "bg-white/10 backdrop-blur-md text-white border border-white/20"
                       : "bg-white text-gray-900 border border-gray-200"
@@ -406,14 +413,29 @@ export function ChatPageAgent() {
                             message.role === "user"
                               ? "bg-white/20"
                               : isDark
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "bg-blue-100 text-blue-700"
+                              ? "bg-[#FF3621]/20 text-[#FF8A80]"
+                              : "bg-[#FF3621]/10 text-[#FF3621]"
                           }`}
                         >
                           <Sparkles className="h-3 w-3" />
                           {toolCall.tool}
                         </span>
                       ))}
+                    </div>
+                  )}
+                  {message.trace_id && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => onViewTrace && onViewTrace(message.trace_id!)}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 ${
+                          isDark
+                            ? "bg-green-500/20 text-green-300 hover:bg-green-500/30"
+                            : "bg-green-100 text-green-700 hover:bg-green-200"
+                        }`}
+                      >
+                        <Activity className="h-3 w-3" />
+                        View Trace
+                      </button>
                     </div>
                   )}
                 </div>
@@ -497,8 +519,8 @@ export function ChatPageAgent() {
               placeholder="Optionally override the system prompt. Define the agent's role, capabilities, and behavior here..."
               className={`flex-1 ${
                 isDark
-                  ? "bg-white/5 border-blue-400/50 text-white placeholder:text-white/40 focus:border-blue-400"
-                  : "bg-white border-blue-500/50 text-gray-900 placeholder:text-gray-400 focus:border-blue-500"
+                  ? "bg-white/5 border-[#FF3621]/50 text-white placeholder:text-white/40 focus:border-[#FF3621]"
+                  : "bg-white border-[#FF3621]/50 text-gray-900 placeholder:text-gray-400 focus:border-[#FF3621]"
               } resize-none`}
             />
           </div>
@@ -510,7 +532,7 @@ export function ChatPageAgent() {
               variant="ghost"
               size="sm"
               onClick={handleResetSystemPrompt}
-              className={isDark ? "text-blue-400 hover:text-blue-300 hover:bg-white/10" : "text-blue-600 hover:text-blue-700"}
+              className={isDark ? "text-[#FF8A80] hover:text-[#FF3621] hover:bg-white/10" : "text-[#FF3621] hover:text-[#E02E1A]"}
             >
               Reset
             </Button>
@@ -525,7 +547,7 @@ export function ChatPageAgent() {
             <Button
               size="sm"
               onClick={handleSaveSystemPrompt}
-              className="bg-blue-500 hover:bg-blue-600 text-white"
+              className="bg-[#FF3621] hover:bg-[#E02E1A] text-white"
             >
               Save
             </Button>
@@ -580,7 +602,7 @@ export function ChatPageAgent() {
                 onClick={sendMessage}
                 disabled={loading || !input.trim()}
                 size="icon"
-                className="absolute bottom-3 right-3 rounded-full bg-blue-500 hover:bg-blue-600 text-white shadow-lg"
+                className="absolute bottom-3 right-3 rounded-full bg-[#FF3621] hover:bg-[#E02E1A] text-white shadow-lg"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
