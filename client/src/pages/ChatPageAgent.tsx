@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import DOMPurify from "dompurify";
+import { marked } from "marked";
 
 interface Model {
   id: string;
@@ -376,12 +377,15 @@ export function ChatPageAgent() {
                   }`}
                 >
                   <div
-                    className={`whitespace-pre-wrap break-words ${message.content === "Thinking..." ? "typing-indicator" : ""}`}
+                    className={`prose prose-invert max-w-none ${message.content === "Thinking..." ? "typing-indicator" : ""}`}
                     dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(message.content, {
-                        ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
-                        ALLOWED_ATTR: ['href', 'target', 'class', 'style']
-                      })
+                      __html: DOMPurify.sanitize(
+                        marked.parse(message.content, { breaks: true, gfm: true }) as string,
+                        {
+                          ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'del', 'input'],
+                          ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'type', 'checked', 'disabled']
+                        }
+                      )
                     }}
                   />
                   {message.tool_calls && message.tool_calls.length > 0 && (
