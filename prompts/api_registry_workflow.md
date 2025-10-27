@@ -2,9 +2,86 @@
 
 This workflow guides you through discovering, registering, and using external API endpoints with the MCP server.
 
-## Overview
+## Quick Start (RECOMMENDED)
 
-The API registry workflow consists of four main steps:
+**🚀 Use `smart_register_api` for one-step registration!**
+
+This tool combines discovery, validation, and registration into a single step:
+
+```
+smart_register_api(
+  api_name="sec_api",
+  description="SEC API for financial filings",
+  endpoint_url="https://api.sec-api.io",
+  warehouse_id="<get from list_warehouses>",
+  api_key="your-api-key-here",  # Optional
+  documentation_url="https://sec-api.io/docs"  # Optional
+)
+```
+
+The tool automatically:
+- Fetches documentation if URL provided
+- Tries common endpoint patterns (/api, /v1, /search, /data, /query, etc.)
+- Tests multiple authentication methods (Bearer header, API key header, query params)
+- Discovers the best working configuration
+- Validates the endpoint
+- Registers in the registry
+
+**This reduces the workflow from 4+ steps to just 1-2 steps!**
+
+## Other Smart Helper Tools
+
+### `fetch_api_documentation`
+Automatically fetch and parse API documentation from URLs.
+
+```
+fetch_api_documentation(
+  documentation_url="https://sec-api.io/docs"
+)
+```
+
+**Returns:**
+- Extracted API URLs found in documentation
+- Common endpoint paths (/api, /v1, etc.)
+- Parameter names (apikey, token, etc.)
+- Code examples count
+- Content preview
+
+**When to use:** User provides a documentation link but you need to extract endpoint details before registration.
+
+### `try_common_api_patterns`
+Automatically test common API endpoint patterns with multiple auth methods.
+
+```
+try_common_api_patterns(
+  base_url="https://api.example.com",
+  api_key="your-api-key-here"  # Optional
+)
+```
+
+**Tests these patterns automatically:**
+- Base URL itself
+- `/api`, `/api/v1`, `/api/v2`
+- `/v1`, `/v2`
+- `/search`, `/query`, `/data`
+- `/status`, `/health`, `/docs`, `/swagger`
+
+**With these auth methods:**
+- No authentication
+- Bearer token header
+- X-API-Key header
+- apikey query parameter
+- api_key query parameter
+
+**Returns:** List of successful endpoints found with their auth methods.
+
+**When to use:** You have a base URL but don't know the exact endpoint path or auth method.
+
+---
+
+## Manual Workflow (Use only if smart tools fail)
+
+The manual API registry workflow consists of four main steps:
 
 1. **Discover** - Analyze the API endpoint to understand authentication and data capabilities
 2. **Register** - Store the API configuration in the Lakebase registry
