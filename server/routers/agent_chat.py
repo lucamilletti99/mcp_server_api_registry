@@ -20,6 +20,8 @@ from databricks.sdk.core import Config
 import httpx
 import json
 
+from server.trace_manager import get_trace_manager
+
 router = APIRouter()
 
 # Cache the MCP tools at startup so we don't reload them on every request
@@ -75,6 +77,7 @@ class AgentChatResponse(BaseModel):
     response: str
     iterations: int
     tool_calls: List[Dict[str, Any]]
+    trace_id: Optional[str] = None  # MLflow-style trace ID
 
 
 async def load_mcp_tools_cached(force_reload: bool = False) -> List[Dict[str, Any]]:
@@ -258,7 +261,8 @@ async def run_agent_loop(
     tools: List[Dict[str, Any]],
     max_iterations: int = 10,
     request: Request = None,
-    custom_system_prompt: Optional[str] = None
+    custom_system_prompt: Optional[str] = None,
+    trace_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run the agentic loop.
 
@@ -271,9 +275,10 @@ async def run_agent_loop(
         max_iterations: Max agent iterations
         request: FastAPI Request object for on-behalf-of auth
         custom_system_prompt: Optional custom system prompt from user
+        trace_id: Optional trace ID for MLflow tracing
 
     Returns:
-        Final response with traces
+        Final response with traces and trace_id
     """
     # Use custom system prompt if provided, otherwise use default
     if custom_system_prompt:
@@ -359,11 +364,34 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
     # Prepend system message to conversation
     messages = [{"role": "system", "content": system_prompt}] + user_messages.copy()
     traces = []
+    trace_manager = get_trace_manager()
 
     for iteration in range(max_iterations):
-        # Call the model
+        # Call the model with tracing
         print(f"[Agent Loop] Iteration {iteration + 1}: Calling model with {len(messages)} messages")
+
+        # Add LLM span
+        import time
+        llm_span_id = None
+        if trace_id:
+            llm_span_id = trace_manager.add_span(
+                trace_id=trace_id,
+                name=f'llm:/serving-endpoints/{model}/invocations',
+                inputs={'messages': [{'role': m.get('role'), 'content_preview': str(m.get('content', ''))[:100]} for m in messages]},
+                span_type='LLM'
+            )
+
+        llm_start_time = time.time()
         response = await call_foundation_model(messages, model=model, tools=tools, request=request)
+        llm_duration = time.time() - llm_start_time
+
+        if trace_id and llm_span_id:
+            trace_manager.complete_span(
+                trace_id=trace_id,
+                span_id=llm_span_id,
+                outputs={'response': response},
+                status='SUCCESS'
+            )
 
         # Extract assistant message
         if 'choices' not in response or len(response['choices']) == 0:
@@ -429,8 +457,29 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
 
                 print(f"[Agent Loop] Executing tool: {tool_name}")
 
+                # Add tool span
+                tool_span_id = None
+                if trace_id:
+                    tool_span_id = trace_manager.add_span(
+                        trace_id=trace_id,
+                        name=tool_name,
+                        inputs=tool_args,
+                        parent_id=llm_span_id,
+                        span_type='TOOL'
+                    )
+
                 # Execute via MCP
+                tool_start_time = time.time()
                 result = await execute_mcp_tool(tool_name, tool_args)
+                tool_duration = time.time() - tool_start_time
+
+                if trace_id and tool_span_id:
+                    trace_manager.complete_span(
+                        trace_id=trace_id,
+                        span_id=tool_span_id,
+                        outputs={'result': result[:500] if len(str(result)) > 500 else result},
+                        status='SUCCESS'
+                    )
 
                 # Ensure result is not empty
                 if not result or result.strip() == "":
@@ -470,8 +519,29 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
                 tool_name = tc['function']['name']
                 tool_args = json.loads(tc['function']['arguments'])
 
+                # Add tool span
+                tool_span_id = None
+                if trace_id:
+                    tool_span_id = trace_manager.add_span(
+                        trace_id=trace_id,
+                        name=tool_name,
+                        inputs=tool_args,
+                        parent_id=llm_span_id,
+                        span_type='TOOL'
+                    )
+
                 # Execute via MCP
+                tool_start_time = time.time()
                 result = await execute_mcp_tool(tool_name, tool_args)
+                tool_duration = time.time() - tool_start_time
+
+                if trace_id and tool_span_id:
+                    trace_manager.complete_span(
+                        trace_id=trace_id,
+                        span_id=tool_span_id,
+                        outputs={'result': result[:500] if len(str(result)) > 500 else result},
+                        status='SUCCESS'
+                    )
 
                 # Ensure result is not empty
                 if not result or result.strip() == "":
@@ -495,18 +565,28 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
             # Final answer from model
             final_content = message.get('content', '')
 
+            # Complete the trace
+            if trace_id:
+                trace_manager.complete_trace(trace_id, status='SUCCESS')
+
             return {
                 "response": final_content,
                 "iterations": iteration + 1,
                 "traces": traces,
-                "finish_reason": finish_reason
+                "finish_reason": finish_reason,
+                "trace_id": trace_id
             }
+
+    # Complete the trace with max_iterations status
+    if trace_id:
+        trace_manager.complete_trace(trace_id, status='SUCCESS')
 
     return {
         "response": "Agent reached maximum iterations",
         "iterations": max_iterations,
         "traces": traces,
-        "finish_reason": "max_iterations"
+        "finish_reason": "max_iterations",
+        "trace_id": trace_id
     }
 
 
@@ -525,6 +605,24 @@ async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentC
         Agent response with tool call traces
     """
     try:
+        # Create a trace for this conversation
+        trace_manager = get_trace_manager()
+        trace_id = trace_manager.create_trace(
+            request_metadata={
+                "model": chat_request.model,
+                "message_count": len(chat_request.messages),
+                "first_message": chat_request.messages[0].content[:100] if chat_request.messages else ""
+            }
+        )
+
+        # Add root span for the agent
+        root_span_id = trace_manager.add_span(
+            trace_id=trace_id,
+            name="agent",
+            inputs={"messages": [{"role": msg.role, "content": msg.content[:100]} for msg in chat_request.messages]},
+            span_type='AGENT'
+        )
+
         # Load tools (cached after first call)
         tools = await load_mcp_tools_cached()
 
@@ -538,13 +636,23 @@ async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentC
             tools=tools,
             max_iterations=10,
             request=request,
-            custom_system_prompt=chat_request.system_prompt
+            custom_system_prompt=chat_request.system_prompt,
+            trace_id=trace_id
+        )
+
+        # Complete root span
+        trace_manager.complete_span(
+            trace_id=trace_id,
+            span_id=root_span_id,
+            outputs={"response": result["response"][:500]},
+            status='SUCCESS'
         )
 
         return AgentChatResponse(
             response=result["response"],
             iterations=result["iterations"],
-            tool_calls=result["traces"]
+            tool_calls=result["traces"],
+            trace_id=trace_id
         )
 
     except Exception as e:
