@@ -105,15 +105,17 @@ function App() {
         </Select>
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content - Keep all tabs rendered to preserve state */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "chat" ? (
+        <div className={activeTab === "chat" ? "h-full" : "hidden"}>
           <ChatPageAgent onViewTrace={handleViewTrace} />
-        ) : activeTab === "mcp-info" ? (
+        </div>
+        <div className={activeTab === "mcp-info" ? "h-full" : "hidden"}>
           <PromptsPage />
-        ) : (
+        </div>
+        <div className={activeTab === "traces" ? "h-full" : "hidden"}>
           <TracesPage initialTraceId={selectedTraceId} />
-        )}
+        </div>
       </div>
     </div>
   );

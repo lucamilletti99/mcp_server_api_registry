@@ -143,6 +143,9 @@
 /* Markdown prose styling */
 .prose {
   max-width: none;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 .prose h1,
@@ -227,12 +230,32 @@
 }
 
 .prose a {
-  color: #60a5fa;
+  color: #ffffff;
   text-decoration: underline;
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.6);
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-all;
 }
 
 .prose a:hover {
-  color: #93c5fd;
+  color: #ffffff;
+  text-decoration-thickness: 3px;
+  text-decoration-color: #ffffff;
+}
+
+/* Links in light mode assistant messages need dark color */
+:not(.dark) .bg-white .prose a {
+  color: #1e40af;
+  text-decoration-color: rgba(30, 64, 175, 0.6);
+}
+
+:not(.dark) .bg-white .prose a:hover {
+  color: #1e3a8a;
+  text-decoration-color: #1e3a8a;
 }
 
 .prose hr {

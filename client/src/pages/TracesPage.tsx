@@ -386,7 +386,7 @@ export function TracesPage({ initialTraceId }: TracesPageProps = {}) {
                           </Badge>
                         </div>
                         <p className={`text-sm truncate ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                          {trace.request_metadata?.first_message || 'No message'}
+                          {trace.request_metadata?.current_user_message || 'No message'}
                         </p>
                       </div>
                       <div className="text-right ml-4">

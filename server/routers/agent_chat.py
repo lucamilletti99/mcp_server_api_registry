@@ -607,11 +607,19 @@ async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentC
     try:
         # Create a trace for this conversation
         trace_manager = get_trace_manager()
+
+        # Get the most recent user message (the current question)
+        current_user_message = ""
+        for msg in reversed(chat_request.messages):
+            if msg.role == "user":
+                current_user_message = msg.content[:100]
+                break
+
         trace_id = trace_manager.create_trace(
             request_metadata={
                 "model": chat_request.model,
                 "message_count": len(chat_request.messages),
-                "first_message": chat_request.messages[0].content[:100] if chat_request.messages else ""
+                "current_user_message": current_user_message
             }
         )
 
