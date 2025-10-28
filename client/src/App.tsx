@@ -2,7 +2,8 @@ import { useState } from "react";
 import { ChatPageAgent } from "./pages/ChatPageAgent";
 import { PromptsPage } from "./pages/PromptsPage";
 import { TracesPage } from "./pages/TracesPage";
-import { MessageSquare, FileCode, Moon, Sun, Activity } from "lucide-react";
+import { RegistryPage } from "./pages/RegistryPage";
+import { MessageSquare, FileCode, Moon, Sun, Activity, Database } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -77,6 +78,21 @@ function App() {
             <Activity className="h-4 w-4" />
             Traces
           </button>
+          <button
+            onClick={() => setActiveTab("registry")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              activeTab === "registry"
+                ? isDark
+                  ? "bg-white/10 text-white"
+                  : "bg-gray-100 text-gray-900"
+                : isDark
+                ? "text-white/60 hover:text-white/80 hover:bg-white/5"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <Database className="h-4 w-4" />
+            API Registry
+          </button>
         </div>
 
         {/* Theme Selector */}
@@ -115,6 +131,9 @@ function App() {
         </div>
         <div className={activeTab === "traces" ? "h-full" : "hidden"}>
           <TracesPage initialTraceId={selectedTraceId} />
+        </div>
+        <div className={activeTab === "registry" ? "h-full" : "hidden"}>
+          <RegistryPage />
         </div>
       </div>
     </div>

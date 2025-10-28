@@ -21,6 +21,9 @@ import {
   Wrench,
   HelpCircle,
   Activity,
+  Copy,
+  Check,
+  Edit2,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import DOMPurify from "dompurify";
@@ -67,6 +70,9 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
   const [systemPrompt, setSystemPrompt] = useState<string>("");
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [tempSystemPrompt, setTempSystemPrompt] = useState<string>("");
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingContent, setEditingContent] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
@@ -194,6 +200,102 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
 
   const handleResetSystemPrompt = () => {
     setTempSystemPrompt("");
+  };
+
+  const handleCopyMessage = async (content: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  };
+
+  const handleEditMessage = (index: number, content: string) => {
+    setEditingIndex(index);
+    setEditingContent(content);
+  };
+
+  const handleSaveEdit = async (index: number) => {
+    if (!editingContent.trim()) return;
+
+    // Remove all messages after the edited one
+    const updatedMessages = messages.slice(0, index);
+    setMessages(updatedMessages);
+    setEditingIndex(null);
+
+    // Set the edited content as the new input and send it
+    setInput(editingContent);
+    setEditingContent("");
+
+    // Trigger send with the new content
+    const userMessage: Message = {
+      role: "user",
+      content: editingContent,
+    };
+
+    setMessages((prev) => [...prev, userMessage, {
+      role: "assistant",
+      content: "Thinking...",
+    }]);
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/agent/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [...updatedMessages.map(m => ({ role: m.role, content: m.content })), userMessage],
+          model: selectedModel,
+          system_prompt: systemPrompt || undefined,
+        }),
+      });
+
+      const data = await response.json();
+      setMessages((prev) => prev.slice(0, -1));
+
+      if (data.detail) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Error: ${data.detail}`,
+          },
+        ]);
+        return;
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: data.response,
+          tool_calls: data.tool_calls,
+          trace_id: data.trace_id,
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      setMessages((prev) => prev.slice(0, -1));
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, I encountered an error processing your request.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      setInput("");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setEditingContent("");
   };
 
   const suggestedActions = [
@@ -384,7 +486,7 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-6 py-4 shadow-lg ${
+                  className={`max-w-[80%] rounded-2xl px-6 py-4 shadow-lg relative group ${
                     message.role === "user"
                       ? "bg-[#FF3621] text-white"
                       : isDark
@@ -392,51 +494,116 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
                       : "bg-white text-gray-900 border border-gray-200"
                   }`}
                 >
-                  <div
-                    className={`prose prose-invert max-w-none ${message.content === "Thinking..." ? "typing-indicator" : ""}`}
-                    dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(
-                        marked.parse(message.content, { breaks: true, gfm: true }) as string,
-                        {
-                          ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'del', 'input'],
-                          ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'type', 'checked', 'disabled']
-                        }
-                      )
-                    }}
-                  />
-                  {message.tool_calls && message.tool_calls.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {message.tool_calls.map((toolCall, tcIndex) => (
-                        <span
-                          key={tcIndex}
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                            message.role === "user"
-                              ? "bg-white/20"
-                              : isDark
-                              ? "bg-[#FF3621]/20 text-[#FF8A80]"
-                              : "bg-[#FF3621]/10 text-[#FF3621]"
-                          }`}
-                        >
-                          <Sparkles className="h-3 w-3" />
-                          {toolCall.tool}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {message.trace_id && (
-                    <div className="mt-3">
+                  {/* Action Buttons */}
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {message.role === "assistant" && message.content !== "Thinking..." && (
                       <button
-                        onClick={() => onViewTrace && onViewTrace(message.trace_id!)}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 ${
+                        onClick={() => handleCopyMessage(message.content, index)}
+                        className={`p-1.5 rounded-lg transition-all ${
                           isDark
-                            ? "bg-green-500/20 text-green-300 hover:bg-green-500/30"
-                            : "bg-green-100 text-green-700 hover:bg-green-200"
+                            ? "hover:bg-white/10 text-white/60 hover:text-white"
+                            : "hover:bg-gray-100 text-gray-500 hover:text-gray-900"
                         }`}
+                        title="Copy message"
                       >
-                        <Activity className="h-3 w-3" />
-                        View Trace
+                        {copiedIndex === index ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
                       </button>
+                    )}
+                    {message.role === "user" && editingIndex !== index && (
+                      <button
+                        onClick={() => handleEditMessage(index, message.content)}
+                        className="p-1.5 rounded-lg transition-all hover:bg-white/20 text-white/80 hover:text-white"
+                        title="Edit and resend"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Message Content */}
+                  {editingIndex === index ? (
+                    <div className="space-y-3">
+                      <Textarea
+                        value={editingContent}
+                        onChange={(e) => setEditingContent(e.target.value)}
+                        className={`min-h-[100px] ${
+                          isDark
+                            ? "bg-white/10 border-white/20 text-white"
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                        autoFocus
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          className={isDark ? "border-white/20 text-white hover:bg-white/10" : ""}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveEdit(index)}
+                          className="bg-[#FF3621] hover:bg-[#E02E1A] text-white"
+                        >
+                          Send
+                        </Button>
+                      </div>
                     </div>
+                  ) : (
+                    <>
+                      <div
+                        className={`prose prose-invert max-w-none ${message.content === "Thinking..." ? "typing-indicator" : ""}`}
+                        dangerouslySetInnerHTML={{
+                          __html: DOMPurify.sanitize(
+                            marked.parse(message.content, { breaks: true, gfm: true }) as string,
+                            {
+                              ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'code', 'pre', 'blockquote', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'del', 'input'],
+                              ALLOWED_ATTR: ['href', 'target', 'class', 'style', 'type', 'checked', 'disabled']
+                            }
+                          )
+                        }}
+                      />
+                      {message.tool_calls && message.tool_calls.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.tool_calls.map((toolCall, tcIndex) => (
+                            <span
+                              key={tcIndex}
+                              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                                message.role === "user"
+                                  ? "bg-white/20"
+                                  : isDark
+                                  ? "bg-[#FF3621]/20 text-[#FF8A80]"
+                                  : "bg-[#FF3621]/10 text-[#FF3621]"
+                              }`}
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              {toolCall.tool}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {message.trace_id && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => onViewTrace && onViewTrace(message.trace_id!)}
+                            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-all hover:scale-105 ${
+                              isDark
+                                ? "bg-green-500/20 text-green-300 hover:bg-green-500/30"
+                                : "bg-green-100 text-green-700 hover:bg-green-200"
+                            }`}
+                          >
+                            <Activity className="h-3 w-3" />
+                            View Trace
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
