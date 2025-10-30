@@ -373,9 +373,14 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
         if len(parts) == 2:
             catalog_name, schema_name = parts
             context_additions.append(f"\n\n**Selected Catalog.Schema:** `{catalog_name}.{schema_name}`")
-            context_additions.append(f"\n**IMPORTANT:** When executing SQL queries, use this catalog (`{catalog_name}`) and schema (`{schema_name}`) as defaults. For execute_dbsql calls, pass:")
+            context_additions.append(f"\n**IMPORTANT:** The API registry table is located in this catalog.schema. When calling any registry tools, ALWAYS pass:")
             context_additions.append(f"\n- `catalog=\"{catalog_name}\"`")
             context_additions.append(f"\n- `schema=\"{schema_name}\"`")
+            context_additions.append(f"\n\n**Tools that need catalog/schema:**")
+            context_additions.append(f"\n- `check_api_registry(warehouse_id=\"{warehouse_id}\", catalog=\"{catalog_name}\", schema=\"{schema_name}\")`")
+            context_additions.append(f"\n- `register_api_in_registry(..., warehouse_id=\"{warehouse_id}\", catalog=\"{catalog_name}\", schema=\"{schema_name}\")`")
+            context_additions.append(f"\n- `smart_register_api(..., warehouse_id=\"{warehouse_id}\", catalog=\"{catalog_name}\", schema=\"{schema_name}\")`")
+            context_additions.append(f"\n- `execute_dbsql(query=\"...\", warehouse_id=\"{warehouse_id}\", catalog=\"{catalog_name}\", schema=\"{schema_name}\")`")
 
     if context_additions:
         system_prompt += ''.join(context_additions)

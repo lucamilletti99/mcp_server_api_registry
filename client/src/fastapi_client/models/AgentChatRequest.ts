@@ -11,5 +11,7 @@ export type AgentChatRequest = {
     model?: string;
     max_tokens?: number;
     system_prompt?: (string | null);
+    warehouse_id?: (string | null);
+    catalog_schema?: (string | null);
 };
 

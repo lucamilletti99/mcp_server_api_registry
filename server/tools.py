@@ -437,14 +437,20 @@ def load_tools(mcp_server):
     return _execute_sql_query(query, warehouse_id, catalog, schema, limit)
 
   @mcp_server.tool
-  def check_api_registry(warehouse_id: str = None, limit: int = 100) -> dict:
+  def check_api_registry(
+    warehouse_id: str = None,
+    catalog: str = None,
+    schema: str = None,
+    limit: int = 100
+  ) -> dict:
     """Check the Databricks API Registry to see all available API endpoints.
 
-    This queries the luca_milletti.custom_mcp_server.api_registry table
-    to return all registered API endpoints in the Lakebase instance.
+    This queries the api_registry table in the specified catalog.schema.
 
     Args:
         warehouse_id: SQL warehouse ID (optional, uses env var if not provided)
+        catalog: Catalog name (optional, defaults to env var API_REGISTRY_CATALOG or 'luca_milletti')
+        schema: Schema name (optional, defaults to env var API_REGISTRY_SCHEMA or 'custom_mcp_server')
         limit: Maximum number of rows to return (default: 100)
 
     Returns:
@@ -454,19 +460,27 @@ def load_tools(mcp_server):
         - API configurations and metadata
         - Current status of each endpoint
     """
-    # Fixed query for the API registry table (fully-qualified table name)
-    query = 'SELECT * FROM luca_milletti.custom_mcp_server.api_registry'
+    # Use provided catalog/schema or fall back to environment variables or defaults
+    catalog = catalog or os.environ.get('API_REGISTRY_CATALOG', 'luca_milletti')
+    schema = schema or os.environ.get('API_REGISTRY_SCHEMA', 'custom_mcp_server')
 
-    # Don't pass catalog/schema since we're using fully-qualified table name
+    # Build fully-qualified table name
+    table_name = f'{catalog}.{schema}.api_registry'
+    query = f'SELECT * FROM {table_name}'
+
+    print(f'📊 Querying API registry table: {table_name}')
+
+    # Don't pass catalog/schema to _execute_sql_query since we're using fully-qualified table name
     # Passing them would prepend USE CATALOG/USE SCHEMA which interferes with results
     result = _execute_sql_query(query, warehouse_id, catalog=None, schema=None, limit=limit)
 
     # Add context to the result
     if result.get('success'):
       result['registry_info'] = {
-        'catalog': 'luca_milletti',
-        'schema': 'custom_mcp_server',
+        'catalog': catalog,
+        'schema': schema,
         'table': 'api_registry',
+        'full_table_name': table_name,
         'description': 'Databricks API Registry containing all available API endpoints',
       }
 
@@ -773,8 +787,10 @@ def load_tools(mcp_server):
     token_info: str = '',
     request_params: str = '{}',
     validate_after_register: bool = True,
+    catalog: str = None,
+    schema: str = None,
   ) -> dict:
-    """Register a new API endpoint in the Lakebase api_registry table.
+    """Register a new API endpoint in the api_registry table.
 
     This tool adds a discovered API to your registry for tracking and reuse.
     It automatically uses your authenticated user identity and validates the API.
@@ -789,6 +805,8 @@ def load_tools(mcp_server):
         token_info: Authentication token or API key (if applicable)
         request_params: JSON string of request parameters (default: "{}")
         validate_after_register: Whether to validate the API after registering (default: True)
+        catalog: Catalog name (optional, defaults to env var API_REGISTRY_CATALOG or 'luca_milletti')
+        schema: Schema name (optional, defaults to env var API_REGISTRY_SCHEMA or 'custom_mcp_server')
 
     Returns:
         Dictionary with registration results including:
@@ -797,6 +815,13 @@ def load_tools(mcp_server):
         - status: Initial status (pending or valid if validated)
         - validation_message: Results from validation if performed
     """
+    # Use provided catalog/schema or fall back to environment variables or defaults
+    catalog = catalog or os.environ.get('API_REGISTRY_CATALOG', 'luca_milletti')
+    schema = schema or os.environ.get('API_REGISTRY_SCHEMA', 'custom_mcp_server')
+
+    # Build fully-qualified table name
+    table_name = f'{catalog}.{schema}.api_registry'
+    print(f'📝 Registering API in table: {table_name}')
     try:
       # Get authenticated user info for user_who_requested field
       headers = get_http_headers()
@@ -836,9 +861,9 @@ def load_tools(mcp_server):
       def escape_sql_string(s):
         return s.replace("'", "''") if s else ''
 
-      # Build INSERT query
+      # Build INSERT query with dynamic table name
       insert_query = f"""
-INSERT INTO luca_milletti.custom_mcp_server.api_registry
+INSERT INTO {table_name}
 (api_id, api_name, description, user_who_requested, modified_date,
  api_endpoint, http_method, auth_type, token_info, request_params,
  status, validation_message, created_at)
@@ -1015,6 +1040,8 @@ VALUES (
     warehouse_id: str,
     api_key: str = None,
     documentation_url: str = None,
+    catalog: str = None,
+    schema: str = None,
   ) -> dict:
     """Smart one-step API registration with automatic discovery and validation.
 
@@ -1034,6 +1061,8 @@ VALUES (
         warehouse_id: SQL warehouse ID for database operations
         api_key: Optional API key (will try multiple auth methods)
         documentation_url: Optional documentation URL to fetch additional info
+        catalog: Catalog name (optional, defaults to env var API_REGISTRY_CATALOG or 'luca_milletti')
+        schema: Schema name (optional, defaults to env var API_REGISTRY_SCHEMA or 'custom_mcp_server')
 
     Returns:
         Dictionary with registration results and discovery insights
@@ -1097,6 +1126,8 @@ VALUES (
         token_info=final_api_key,
         request_params='{}',
         validate_after_register=True,
+        catalog=catalog,
+        schema=schema,
       )
 
       # Add discovery insights to the result
