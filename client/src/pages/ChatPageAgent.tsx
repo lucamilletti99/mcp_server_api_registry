@@ -464,28 +464,29 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
             </SelectContent>
           </Select>
 
-          <div className="flex flex-col gap-1">
-            <Input
-              placeholder="Filter warehouses..."
-              value={warehouseFilter}
-              onChange={(e) => setWarehouseFilter(e.target.value)}
-              className={`w-[200px] h-7 text-xs ${
-                isDark
-                  ? "bg-black/20 border-white/20 text-white placeholder:text-white/50"
-                  : "bg-white border-gray-300 text-gray-900"
-              }`}
-            />
-            <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-              <SelectTrigger className={`w-[200px] ${
-                isDark
-                  ? "bg-black/20 border-white/20 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              } backdrop-blur-sm`}>
-                <SelectValue placeholder="Select warehouse">
-                  {warehouses.find((w) => w.id === selectedWarehouse)?.name || "Select warehouse"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
+          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+            <SelectTrigger className={`w-[200px] ${
+              isDark
+                ? "bg-black/20 border-white/20 text-white"
+                : "bg-white border-gray-300 text-gray-900"
+            } backdrop-blur-sm`}>
+              <SelectValue placeholder="Select warehouse">
+                {warehouses.find((w) => w.id === selectedWarehouse)?.name || "Select warehouse"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <div className="flex items-center px-2 pb-2 sticky top-0 bg-background">
+                <Search className="h-4 w-4 mr-2 text-muted-foreground" />
+                <Input
+                  placeholder="Search warehouses..."
+                  value={warehouseFilter}
+                  onChange={(e) => setWarehouseFilter(e.target.value)}
+                  className="h-8 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
                 {filteredWarehouses.length === 0 ? (
                   <div className="px-2 py-6 text-center text-sm text-muted-foreground">
                     No warehouses found
@@ -505,32 +506,33 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
                     </SelectItem>
                   ))
                 )}
-              </SelectContent>
-            </Select>
-          </div>
+              </div>
+            </SelectContent>
+          </Select>
 
-          <div className="flex flex-col gap-1">
-            <Input
-              placeholder="Filter catalog.schema..."
-              value={catalogSchemaFilter}
-              onChange={(e) => setCatalogSchemaFilter(e.target.value)}
-              className={`w-[280px] h-7 text-xs ${
-                isDark
-                  ? "bg-black/20 border-white/20 text-white placeholder:text-white/50"
-                  : "bg-white border-gray-300 text-gray-900"
-              }`}
-            />
-            <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
-              <SelectTrigger className={`w-[280px] ${
-                isDark
-                  ? "bg-black/20 border-white/20 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              } backdrop-blur-sm`}>
-                <SelectValue placeholder="Select catalog.schema">
-                  {selectedCatalogSchema || "Select catalog.schema"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
+          <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
+            <SelectTrigger className={`w-[280px] ${
+              isDark
+                ? "bg-black/20 border-white/20 text-white"
+                : "bg-white border-gray-300 text-gray-900"
+            } backdrop-blur-sm`}>
+              <SelectValue placeholder="Select catalog.schema">
+                {selectedCatalogSchema || "Select catalog.schema"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <div className="flex items-center px-2 pb-2 sticky top-0 bg-background">
+                <Search className="h-4 w-4 mr-2 text-muted-foreground" />
+                <Input
+                  placeholder="Search catalog.schema..."
+                  value={catalogSchemaFilter}
+                  onChange={(e) => setCatalogSchemaFilter(e.target.value)}
+                  className="h-8 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
                 {filteredCatalogSchemas.length === 0 ? (
                   <div className="px-2 py-6 text-center text-sm text-muted-foreground">
                     No catalog.schema found
@@ -550,9 +552,9 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
                     </SelectItem>
                   ))
                 )}
-              </SelectContent>
-            </Select>
-          </div>
+              </div>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
