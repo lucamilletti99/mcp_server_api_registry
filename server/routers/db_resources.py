@@ -256,7 +256,7 @@ async def validate_api_registry_table(catalog: str, schema: str, warehouse_id: s
                     'exists': False,
                     'error': 'TABLE_NOT_FOUND',
                     'table_name': table_name,
-                    'message': f'Table {table_name} does not exist',
+                    'message': f'No api_registry table exists in {catalog}.{schema}',
                     'suggestion': f'Create the api_registry table in {catalog}.{schema} or select a different catalog.schema',
                 }
             else:
@@ -276,7 +276,7 @@ async def validate_api_registry_table(catalog: str, schema: str, warehouse_id: s
                 'exists': False,
                 'error': 'TABLE_NOT_FOUND',
                 'table_name': f'{catalog}.{schema}.api_registry',
-                'message': f'Table {catalog}.{schema}.api_registry does not exist',
+                'message': f'No api_registry table exists in {catalog}.{schema}',
                 'suggestion': f'Create the api_registry table in {catalog}.{schema} or select a different catalog.schema',
             }
 

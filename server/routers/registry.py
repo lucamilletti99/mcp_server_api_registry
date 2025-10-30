@@ -69,8 +69,19 @@ def get_default_warehouse_id(ws: WorkspaceClient) -> Optional[str]:
 
 
 @router.get('/list', response_model=APIRegistryResponse)
-async def list_apis(request: Request) -> APIRegistryResponse:
+async def list_apis(
+    catalog: str,
+    schema: str,
+    warehouse_id: str,
+    request: Request
+) -> APIRegistryResponse:
     """List all registered APIs from the registry table.
+
+    Args:
+        catalog: Catalog name
+        schema: Schema name
+        warehouse_id: SQL warehouse ID
+        request: Request object for authentication
 
     Returns:
         List of registered APIs
@@ -78,19 +89,11 @@ async def list_apis(request: Request) -> APIRegistryResponse:
     try:
         ws = get_workspace_client(request)
 
-        # Get warehouse ID
-        warehouse_id = os.environ.get('DATABRICKS_SQL_WAREHOUSE_ID')
-        if not warehouse_id:
-            warehouse_id = get_default_warehouse_id(ws)
-
-        if not warehouse_id:
-            raise HTTPException(
-                status_code=500,
-                detail='No SQL warehouse available. Please configure DATABRICKS_SQL_WAREHOUSE_ID.'
-            )
+        # Build fully-qualified table name
+        table_name = f'{catalog}.{schema}.api_registry'
 
         # Query the registry table
-        query = """
+        query = f"""
         SELECT
             api_id,
             api_name,
@@ -103,7 +106,7 @@ async def list_apis(request: Request) -> APIRegistryResponse:
             created_at,
             modified_date,
             validation_message as last_validated
-        FROM luca_milletti.custom_mcp_server.api_registry
+        FROM {table_name}
         ORDER BY modified_date DESC
         """
 
@@ -154,6 +157,9 @@ async def list_apis(request: Request) -> APIRegistryResponse:
 @router.post('/update/{api_id}')
 async def update_api(
     api_id: str,
+    catalog: str,
+    schema: str,
+    warehouse_id: str,
     api_name: str,
     description: str,
     api_endpoint: str,
@@ -163,6 +169,9 @@ async def update_api(
 
     Args:
         api_id: ID of the API to update
+        catalog: Catalog name
+        schema: Schema name
+        warehouse_id: SQL warehouse ID
         api_name: New name
         description: New description
         api_endpoint: New endpoint URL
@@ -174,20 +183,12 @@ async def update_api(
     try:
         ws = get_workspace_client(request)
 
-        # Get warehouse ID
-        warehouse_id = os.environ.get('DATABRICKS_SQL_WAREHOUSE_ID')
-        if not warehouse_id:
-            warehouse_id = get_default_warehouse_id(ws)
-
-        if not warehouse_id:
-            raise HTTPException(
-                status_code=500,
-                detail='No SQL warehouse available'
-            )
+        # Build fully-qualified table name
+        table_name = f'{catalog}.{schema}.api_registry'
 
         # Update query
         query = f"""
-        UPDATE luca_milletti.custom_mcp_server.api_registry
+        UPDATE {table_name}
         SET
             api_name = '{api_name}',
             description = '{description}',
@@ -220,11 +221,20 @@ async def update_api(
 
 
 @router.delete('/delete/{api_id}')
-async def delete_api(api_id: str, request: Request):
+async def delete_api(
+    api_id: str,
+    catalog: str,
+    schema: str,
+    warehouse_id: str,
+    request: Request
+):
     """Delete an API from the registry.
 
     Args:
         api_id: ID of the API to delete
+        catalog: Catalog name
+        schema: Schema name
+        warehouse_id: SQL warehouse ID
         request: Request object for authentication
 
     Returns:
@@ -233,20 +243,12 @@ async def delete_api(api_id: str, request: Request):
     try:
         ws = get_workspace_client(request)
 
-        # Get warehouse ID
-        warehouse_id = os.environ.get('DATABRICKS_SQL_WAREHOUSE_ID')
-        if not warehouse_id:
-            warehouse_id = get_default_warehouse_id(ws)
-
-        if not warehouse_id:
-            raise HTTPException(
-                status_code=500,
-                detail='No SQL warehouse available'
-            )
+        # Build fully-qualified table name
+        table_name = f'{catalog}.{schema}.api_registry'
 
         # Delete query
         query = f"""
-        DELETE FROM luca_milletti.custom_mcp_server.api_registry
+        DELETE FROM {table_name}
         WHERE api_id = '{api_id}'
         """
 

@@ -23,27 +23,60 @@ interface RegisteredAPI {
   created_at?: string;
 }
 
-export function RegistryPage() {
+interface RegistryPageProps {
+  selectedWarehouse: string;
+  selectedCatalogSchema: string;
+}
+
+export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: RegistryPageProps) {
   const [apis, setApis] = useState<RegisteredAPI[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<RegisteredAPI>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   useEffect(() => {
-    loadApis();
-  }, []);
+    if (selectedWarehouse && selectedCatalogSchema) {
+      loadApis();
+    }
+  }, [selectedWarehouse, selectedCatalogSchema]);
 
   const loadApis = async () => {
+    if (!selectedWarehouse || !selectedCatalogSchema) {
+      setError('Please select a warehouse and catalog.schema');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await fetch('/api/registry/list');
+      setError(null);
+
+      // Parse catalog and schema from full_name
+      const [catalog, schema] = selectedCatalogSchema.split('.');
+
+      const params = new URLSearchParams({
+        catalog,
+        schema,
+        warehouse_id: selectedWarehouse,
+      });
+
+      const response = await fetch(`/api/registry/list?${params.toString()}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to load APIs');
+      }
+
       const data = await response.json();
       setApis(data.apis || []);
     } catch (error) {
       console.error('Failed to load APIs:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load APIs');
+      setApis([]);
     } finally {
       setLoading(false);
     }
@@ -60,8 +93,25 @@ export function RegistryPage() {
   };
 
   const handleSaveEdit = async () => {
+    if (!selectedWarehouse || !selectedCatalogSchema) {
+      alert('Please select a warehouse and catalog.schema');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/registry/update/${editingId}?api_name=${encodeURIComponent(editForm.api_name || '')}&description=${encodeURIComponent(editForm.description || '')}&api_endpoint=${encodeURIComponent(editForm.api_endpoint || '')}`, {
+      // Parse catalog and schema from full_name
+      const [catalog, schema] = selectedCatalogSchema.split('.');
+
+      const params = new URLSearchParams({
+        catalog,
+        schema,
+        warehouse_id: selectedWarehouse,
+        api_name: editForm.api_name || '',
+        description: editForm.description || '',
+        api_endpoint: editForm.api_endpoint || '',
+      });
+
+      const response = await fetch(`/api/registry/update/${editingId}?${params.toString()}`, {
         method: 'POST',
       });
 
@@ -82,8 +132,22 @@ export function RegistryPage() {
   const handleDelete = async (apiId: string) => {
     if (!confirm('Are you sure you want to delete this API?')) return;
 
+    if (!selectedWarehouse || !selectedCatalogSchema) {
+      alert('Please select a warehouse and catalog.schema');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/registry/delete/${apiId}`, {
+      // Parse catalog and schema from full_name
+      const [catalog, schema] = selectedCatalogSchema.split('.');
+
+      const params = new URLSearchParams({
+        catalog,
+        schema,
+        warehouse_id: selectedWarehouse,
+      });
+
+      const response = await fetch(`/api/registry/delete/${apiId}?${params.toString()}`, {
         method: 'DELETE',
       });
 
@@ -199,7 +263,27 @@ export function RegistryPage() {
 
       {/* API Cards */}
       <div className="p-6 overflow-y-auto" style={{ height: 'calc(100% - 100px)' }}>
-        {loading ? (
+        {!selectedWarehouse || !selectedCatalogSchema ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <AlertCircle className={`h-12 w-12 mb-4 ${isDark ? 'text-white/40' : 'text-gray-400'}`} />
+            <p className={`text-lg ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
+              Please select a warehouse and catalog.schema
+            </p>
+            <p className={`text-sm mt-2 ${isDark ? 'text-white/40' : 'text-gray-400'}`}>
+              Go to Chat Playground to configure your database settings
+            </p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-64">
+            <AlertCircle className={`h-12 w-12 mb-4 ${isDark ? 'text-[#FF8A80]' : 'text-[#FF3621]'}`} />
+            <p className={`text-lg ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
+              {error}
+            </p>
+            <p className={`text-sm mt-2 ${isDark ? 'text-white/40' : 'text-gray-400'}`}>
+              {error.toLowerCase().includes('table') && 'No api_registry table exists in this schema'}
+            </p>
+          </div>
+        ) : loading ? (
           <div className="flex items-center justify-center h-64">
             <RefreshCw className={`h-8 w-8 animate-spin ${isDark ? 'text-white/60' : 'text-gray-400'}`} />
           </div>

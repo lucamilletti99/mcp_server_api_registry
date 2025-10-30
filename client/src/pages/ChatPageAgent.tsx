@@ -77,16 +77,24 @@ interface Message {
 
 interface ChatPageAgentProps {
   onViewTrace?: (traceId: string) => void;
+  selectedWarehouse: string;
+  setSelectedWarehouse: (value: string) => void;
+  selectedCatalogSchema: string;
+  setSelectedCatalogSchema: (value: string) => void;
 }
 
-export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
+export function ChatPageAgent({
+  onViewTrace,
+  selectedWarehouse,
+  setSelectedWarehouse,
+  selectedCatalogSchema,
+  setSelectedCatalogSchema,
+}: ChatPageAgentProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("");
   const [warehouseFilter, setWarehouseFilter] = useState<string>("");
   const [catalogSchemas, setCatalogSchemas] = useState<CatalogSchema[]>([]);
-  const [selectedCatalogSchema, setSelectedCatalogSchema] = useState<string>("");
   const [catalogSchemaFilter, setCatalogSchemaFilter] = useState<string>("");
   const [tableValidation, setTableValidation] = useState<{
     exists: boolean;
@@ -619,7 +627,7 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
             </SelectContent>
             </Select>
             {!tableValidation.exists && !tableValidation.checking && (
-              <div className="flex items-center gap-1 text-red-500" title={tableValidation.message || "Table not found"}>
+              <div className="flex items-center gap-1 text-red-500" title={tableValidation.message || "No api_registry table exists in this schema"}>
                 <AlertCircle className="h-4 w-4" />
                 <span className="text-xs">No table</span>
               </div>

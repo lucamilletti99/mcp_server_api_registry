@@ -18,6 +18,10 @@ function App() {
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
 
+  // Shared state for warehouse and catalog/schema selection
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("");
+  const [selectedCatalogSchema, setSelectedCatalogSchema] = useState<string>("");
+
   const isDark = theme === "dark";
 
   const handleViewTrace = (traceId: string) => {
@@ -124,7 +128,13 @@ function App() {
       {/* Tab Content - Keep all tabs rendered to preserve state */}
       <div className="flex-1 overflow-hidden">
         <div className={activeTab === "chat" ? "h-full" : "hidden"}>
-          <ChatPageAgent onViewTrace={handleViewTrace} />
+          <ChatPageAgent
+            onViewTrace={handleViewTrace}
+            selectedWarehouse={selectedWarehouse}
+            setSelectedWarehouse={setSelectedWarehouse}
+            selectedCatalogSchema={selectedCatalogSchema}
+            setSelectedCatalogSchema={setSelectedCatalogSchema}
+          />
         </div>
         <div className={activeTab === "mcp-info" ? "h-full" : "hidden"}>
           <PromptsPage />
@@ -133,7 +143,10 @@ function App() {
           <TracesPage initialTraceId={selectedTraceId} />
         </div>
         <div className={activeTab === "registry" ? "h-full" : "hidden"}>
-          <RegistryPage />
+          <RegistryPage
+            selectedWarehouse={selectedWarehouse}
+            selectedCatalogSchema={selectedCatalogSchema}
+          />
         </div>
       </div>
     </div>
