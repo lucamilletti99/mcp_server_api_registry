@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -82,8 +83,10 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("");
+  const [warehouseFilter, setWarehouseFilter] = useState<string>("");
   const [catalogSchemas, setCatalogSchemas] = useState<CatalogSchema[]>([]);
   const [selectedCatalogSchema, setSelectedCatalogSchema] = useState<string>("");
+  const [catalogSchemaFilter, setCatalogSchemaFilter] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -96,6 +99,15 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+
+  // Filtered lists based on search
+  const filteredWarehouses = warehouses.filter((w) =>
+    w.name.toLowerCase().includes(warehouseFilter.toLowerCase())
+  );
+
+  const filteredCatalogSchemas = catalogSchemas.filter((cs) =>
+    cs.full_name.toLowerCase().includes(catalogSchemaFilter.toLowerCase())
+  );
 
   useEffect(() => {
     fetchModels();
@@ -452,59 +464,95 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
             </SelectContent>
           </Select>
 
-          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-            <SelectTrigger className={`w-[200px] ${
-              isDark
-                ? "bg-black/20 border-white/20 text-white"
-                : "bg-white border-gray-300 text-gray-900"
-            } backdrop-blur-sm`}>
-              <SelectValue placeholder="Select warehouse">
-                {warehouses.find((w) => w.id === selectedWarehouse)?.name || "Select warehouse"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {warehouses.map((warehouse) => (
-                <SelectItem
-                  key={warehouse.id}
-                  value={warehouse.id}
-                >
-                  <div className="flex flex-col">
-                    <span className="font-medium">{warehouse.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {warehouse.size} • {warehouse.state}
-                    </span>
+          <div className="flex flex-col gap-1">
+            <Input
+              placeholder="Filter warehouses..."
+              value={warehouseFilter}
+              onChange={(e) => setWarehouseFilter(e.target.value)}
+              className={`w-[200px] h-7 text-xs ${
+                isDark
+                  ? "bg-black/20 border-white/20 text-white placeholder:text-white/50"
+                  : "bg-white border-gray-300 text-gray-900"
+              }`}
+            />
+            <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+              <SelectTrigger className={`w-[200px] ${
+                isDark
+                  ? "bg-black/20 border-white/20 text-white"
+                  : "bg-white border-gray-300 text-gray-900"
+              } backdrop-blur-sm`}>
+                <SelectValue placeholder="Select warehouse">
+                  {warehouses.find((w) => w.id === selectedWarehouse)?.name || "Select warehouse"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {filteredWarehouses.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                    No warehouses found
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                ) : (
+                  filteredWarehouses.map((warehouse) => (
+                    <SelectItem
+                      key={warehouse.id}
+                      value={warehouse.id}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">{warehouse.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {warehouse.size} • {warehouse.state}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
-            <SelectTrigger className={`w-[280px] ${
-              isDark
-                ? "bg-black/20 border-white/20 text-white"
-                : "bg-white border-gray-300 text-gray-900"
-            } backdrop-blur-sm`}>
-              <SelectValue placeholder="Select catalog.schema">
-                {selectedCatalogSchema || "Select catalog.schema"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {catalogSchemas.map((cs) => (
-                <SelectItem
-                  key={cs.full_name}
-                  value={cs.full_name}
-                >
-                  <div className="flex flex-col">
-                    <span className="font-medium">{cs.full_name}</span>
-                    {cs.comment && (
-                      <span className="text-xs text-muted-foreground">{cs.comment}</span>
-                    )}
+          <div className="flex flex-col gap-1">
+            <Input
+              placeholder="Filter catalog.schema..."
+              value={catalogSchemaFilter}
+              onChange={(e) => setCatalogSchemaFilter(e.target.value)}
+              className={`w-[280px] h-7 text-xs ${
+                isDark
+                  ? "bg-black/20 border-white/20 text-white placeholder:text-white/50"
+                  : "bg-white border-gray-300 text-gray-900"
+              }`}
+            />
+            <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
+              <SelectTrigger className={`w-[280px] ${
+                isDark
+                  ? "bg-black/20 border-white/20 text-white"
+                  : "bg-white border-gray-300 text-gray-900"
+              } backdrop-blur-sm`}>
+                <SelectValue placeholder="Select catalog.schema">
+                  {selectedCatalogSchema || "Select catalog.schema"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {filteredCatalogSchemas.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                    No catalog.schema found
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                ) : (
+                  filteredCatalogSchemas.map((cs) => (
+                    <SelectItem
+                      key={cs.full_name}
+                      value={cs.full_name}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">{cs.full_name}</span>
+                        {cs.comment && (
+                          <span className="text-xs text-muted-foreground">{cs.comment}</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
