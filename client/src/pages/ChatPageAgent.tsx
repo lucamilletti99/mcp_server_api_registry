@@ -25,6 +25,7 @@ import {
   Copy,
   Check,
   Edit2,
+  AlertCircle,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import DOMPurify from "dompurify";
@@ -87,6 +88,12 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
   const [catalogSchemas, setCatalogSchemas] = useState<CatalogSchema[]>([]);
   const [selectedCatalogSchema, setSelectedCatalogSchema] = useState<string>("");
   const [catalogSchemaFilter, setCatalogSchemaFilter] = useState<string>("");
+  const [tableValidation, setTableValidation] = useState<{
+    exists: boolean;
+    error?: string;
+    message?: string;
+    checking: boolean;
+  }>({ exists: true, checking: false });
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -155,6 +162,53 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
       console.error("Failed to fetch catalog schemas:", error);
     }
   };
+
+  const validateApiRegistryTable = async (catalogSchema: string, warehouseId: string) => {
+    if (!catalogSchema || !warehouseId) {
+      setTableValidation({ exists: false, message: "Please select warehouse and catalog.schema", checking: false });
+      return;
+    }
+
+    const parts = catalogSchema.split('.');
+    if (parts.length !== 2) {
+      setTableValidation({ exists: false, error: "Invalid catalog.schema format", checking: false });
+      return;
+    }
+
+    const [catalog, schema] = parts;
+
+    setTableValidation({ exists: true, checking: true });
+
+    try {
+      const data = await DatabaseService.validateApiRegistryTableApiDbValidateApiRegistryTableGet(
+        catalog,
+        schema,
+        warehouseId
+      );
+
+      setTableValidation({
+        exists: data.exists || false,
+        error: data.error,
+        message: data.message,
+        checking: false,
+      });
+    } catch (error) {
+      console.error("Failed to validate api_registry table:", error);
+      setTableValidation({
+        exists: false,
+        error: "Validation failed",
+        message: "Could not validate table existence",
+        checking: false,
+      });
+    }
+  };
+
+  // Validate table when warehouse or catalog/schema changes
+  useEffect(() => {
+    if (selectedWarehouse && selectedCatalogSchema) {
+      validateApiRegistryTable(selectedCatalogSchema, selectedWarehouse);
+    }
+  }, [selectedWarehouse, selectedCatalogSchema]);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -514,16 +568,21 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
             </SelectContent>
           </Select>
 
-          <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
-            <SelectTrigger className={`w-[280px] ${
-              isDark
-                ? "bg-black/20 border-white/20 text-white"
-                : "bg-white border-gray-300 text-gray-900"
-            } backdrop-blur-sm`}>
-              <SelectValue placeholder="Select catalog.schema">
-                {selectedCatalogSchema || "Select catalog.schema"}
-              </SelectValue>
-            </SelectTrigger>
+          <div className="flex items-center gap-2">
+            <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
+              <SelectTrigger className={`w-[280px] ${
+                !tableValidation.exists && !tableValidation.checking
+                  ? "border-red-500"
+                  : ""
+              } ${
+                isDark
+                  ? "bg-black/20 border-white/20 text-white"
+                  : "bg-white border-gray-300 text-gray-900"
+              } backdrop-blur-sm`}>
+                <SelectValue placeholder="Select catalog.schema">
+                  {selectedCatalogSchema || "Select catalog.schema"}
+                </SelectValue>
+              </SelectTrigger>
             <SelectContent>
               <div className="flex items-center px-2 pb-2 sticky top-0 bg-background">
                 <Search className="h-4 w-4 mr-2 text-muted-foreground" />
@@ -558,7 +617,17 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
                 )}
               </div>
             </SelectContent>
-          </Select>
+            </Select>
+            {!tableValidation.exists && !tableValidation.checking && (
+              <div className="flex items-center gap-1 text-red-500" title={tableValidation.message || "Table not found"}>
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-xs">No table</span>
+              </div>
+            )}
+            {tableValidation.checking && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+          </div>
         </div>
       </div>
 

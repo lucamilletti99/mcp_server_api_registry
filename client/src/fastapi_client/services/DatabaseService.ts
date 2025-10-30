@@ -80,4 +80,39 @@ export class DatabaseService {
             url: '/api/db/catalog-schemas',
         });
     }
+    /**
+     * Validate Api Registry Table
+     * Validate if api_registry table exists in the specified catalog.schema.
+     *
+     * Args:
+     * catalog: Catalog name
+     * schema: Schema name
+     * warehouse_id: SQL warehouse ID to execute the validation query
+     *
+     * Returns:
+     * Dictionary indicating if the table exists and any error messages
+     * @param catalog
+     * @param schema
+     * @param warehouseId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static validateApiRegistryTableApiDbValidateApiRegistryTableGet(
+        catalog: string,
+        schema: string,
+        warehouseId: string,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/db/validate-api-registry-table',
+            query: {
+                'catalog': catalog,
+                'schema': schema,
+                'warehouse_id': warehouseId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
 }

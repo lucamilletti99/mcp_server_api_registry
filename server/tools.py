@@ -438,9 +438,9 @@ def load_tools(mcp_server):
 
   @mcp_server.tool
   def check_api_registry(
-    warehouse_id: str = None,
-    catalog: str = None,
-    schema: str = None,
+    warehouse_id: str,
+    catalog: str,
+    schema: str,
     limit: int = 100
   ) -> dict:
     """Check the Databricks API Registry to see all available API endpoints.
@@ -448,9 +448,9 @@ def load_tools(mcp_server):
     This queries the api_registry table in the specified catalog.schema.
 
     Args:
-        warehouse_id: SQL warehouse ID (optional, uses env var if not provided)
-        catalog: Catalog name (optional, defaults to env var API_REGISTRY_CATALOG or 'luca_milletti')
-        schema: Schema name (optional, defaults to env var API_REGISTRY_SCHEMA or 'custom_mcp_server')
+        warehouse_id: SQL warehouse ID (required)
+        catalog: Catalog name (required)
+        schema: Schema name (required)
         limit: Maximum number of rows to return (default: 100)
 
     Returns:
@@ -460,9 +460,12 @@ def load_tools(mcp_server):
         - API configurations and metadata
         - Current status of each endpoint
     """
-    # Use provided catalog/schema or fall back to environment variables or defaults
-    catalog = catalog or os.environ.get('API_REGISTRY_CATALOG', 'luca_milletti')
-    schema = schema or os.environ.get('API_REGISTRY_SCHEMA', 'custom_mcp_server')
+    if not catalog or not schema:
+      return {
+        'success': False,
+        'error': 'catalog and schema parameters are required',
+        'message': 'Please provide both catalog and schema parameters to locate the api_registry table',
+      }
 
     # Build fully-qualified table name
     table_name = f'{catalog}.{schema}.api_registry'
@@ -782,13 +785,13 @@ def load_tools(mcp_server):
     description: str,
     api_endpoint: str,
     warehouse_id: str,
+    catalog: str,
+    schema: str,
     http_method: str = 'GET',
     auth_type: str = 'none',
     token_info: str = '',
     request_params: str = '{}',
     validate_after_register: bool = True,
-    catalog: str = None,
-    schema: str = None,
   ) -> dict:
     """Register a new API endpoint in the api_registry table.
 
@@ -800,13 +803,13 @@ def load_tools(mcp_server):
         description: Description of what the API does
         api_endpoint: Full URL of the API endpoint
         warehouse_id: SQL warehouse ID to use for database operations
+        catalog: Catalog name (required)
+        schema: Schema name (required)
         http_method: HTTP method (default: GET)
         auth_type: Authentication type (none, api_key, bearer, basic, etc.)
         token_info: Authentication token or API key (if applicable)
         request_params: JSON string of request parameters (default: "{}")
         validate_after_register: Whether to validate the API after registering (default: True)
-        catalog: Catalog name (optional, defaults to env var API_REGISTRY_CATALOG or 'luca_milletti')
-        schema: Schema name (optional, defaults to env var API_REGISTRY_SCHEMA or 'custom_mcp_server')
 
     Returns:
         Dictionary with registration results including:
@@ -815,9 +818,12 @@ def load_tools(mcp_server):
         - status: Initial status (pending or valid if validated)
         - validation_message: Results from validation if performed
     """
-    # Use provided catalog/schema or fall back to environment variables or defaults
-    catalog = catalog or os.environ.get('API_REGISTRY_CATALOG', 'luca_milletti')
-    schema = schema or os.environ.get('API_REGISTRY_SCHEMA', 'custom_mcp_server')
+    if not catalog or not schema:
+      return {
+        'success': False,
+        'error': 'catalog and schema parameters are required',
+        'message': 'Please provide both catalog and schema parameters to locate the api_registry table',
+      }
 
     # Build fully-qualified table name
     table_name = f'{catalog}.{schema}.api_registry'
@@ -1038,10 +1044,10 @@ VALUES (
     description: str,
     endpoint_url: str,
     warehouse_id: str,
+    catalog: str,
+    schema: str,
     api_key: str = None,
     documentation_url: str = None,
-    catalog: str = None,
-    schema: str = None,
   ) -> dict:
     """Smart one-step API registration with automatic discovery and validation.
 
@@ -1059,10 +1065,10 @@ VALUES (
         description: Description of what the API does
         endpoint_url: Base URL or specific endpoint URL to try
         warehouse_id: SQL warehouse ID for database operations
+        catalog: Catalog name (required)
+        schema: Schema name (required)
         api_key: Optional API key (will try multiple auth methods)
         documentation_url: Optional documentation URL to fetch additional info
-        catalog: Catalog name (optional, defaults to env var API_REGISTRY_CATALOG or 'luca_milletti')
-        schema: Schema name (optional, defaults to env var API_REGISTRY_SCHEMA or 'custom_mcp_server')
 
     Returns:
         Dictionary with registration results and discovery insights

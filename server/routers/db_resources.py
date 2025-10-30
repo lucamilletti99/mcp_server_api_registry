@@ -189,3 +189,100 @@ async def list_all_catalog_schemas() -> Dict[str, Any]:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'Failed to list catalog schemas: {str(e)}')
+
+
+@router.get('/validate-api-registry-table')
+async def validate_api_registry_table(catalog: str, schema: str, warehouse_id: str) -> Dict[str, Any]:
+    """Validate if api_registry table exists in the specified catalog.schema.
+
+    Args:
+        catalog: Catalog name
+        schema: Schema name
+        warehouse_id: SQL warehouse ID to execute the validation query
+
+    Returns:
+        Dictionary indicating if the table exists and any error messages
+    """
+    try:
+        from databricks.sdk.service.sql import StatementState
+        import time
+
+        w = get_workspace_client()
+
+        # Build table name
+        table_name = f'{catalog}.{schema}.api_registry'
+
+        # Try to query the table with LIMIT 0 to check existence without fetching data
+        query = f'SELECT * FROM {table_name} LIMIT 0'
+
+        print(f'🔍 Validating table existence: {table_name}')
+
+        # Execute the statement
+        statement = w.statement_execution.execute_statement(
+            warehouse_id=warehouse_id, statement=query, wait_timeout='30s'
+        )
+
+        # Wait for completion
+        max_wait = 30
+        start_time = time.time()
+
+        while statement.status.state in [StatementState.PENDING, StatementState.RUNNING]:
+            if time.time() - start_time > max_wait:
+                return {
+                    'exists': False,
+                    'error': 'Validation query timed out',
+                    'table_name': table_name,
+                    'message': f'Could not validate table {table_name} within {max_wait} seconds',
+                }
+
+            time.sleep(0.5)
+            statement = w.statement_execution.get_statement(statement.statement_id)
+
+        # Check final state
+        if statement.status.state == StatementState.SUCCEEDED:
+            return {
+                'exists': True,
+                'table_name': table_name,
+                'catalog': catalog,
+                'schema': schema,
+                'message': f'Table {table_name} exists and is accessible',
+            }
+        else:
+            error_message = statement.status.error.message if statement.status.error else 'Unknown error'
+
+            # Check if it's a table not found error
+            if 'TABLE_OR_VIEW_NOT_FOUND' in error_message or 'does not exist' in error_message.lower():
+                return {
+                    'exists': False,
+                    'error': 'TABLE_NOT_FOUND',
+                    'table_name': table_name,
+                    'message': f'Table {table_name} does not exist',
+                    'suggestion': f'Create the api_registry table in {catalog}.{schema} or select a different catalog.schema',
+                }
+            else:
+                return {
+                    'exists': False,
+                    'error': error_message,
+                    'table_name': table_name,
+                    'message': f'Error validating table: {error_message}',
+                }
+
+    except Exception as e:
+        error_str = str(e)
+
+        # Check if it's a table not found error
+        if 'TABLE_OR_VIEW_NOT_FOUND' in error_str or 'does not exist' in error_str.lower():
+            return {
+                'exists': False,
+                'error': 'TABLE_NOT_FOUND',
+                'table_name': f'{catalog}.{schema}.api_registry',
+                'message': f'Table {catalog}.{schema}.api_registry does not exist',
+                'suggestion': f'Create the api_registry table in {catalog}.{schema} or select a different catalog.schema',
+            }
+
+        return {
+            'exists': False,
+            'error': str(e),
+            'table_name': f'{catalog}.{schema}.api_registry',
+            'message': f'Failed to validate table: {str(e)}',
+        }
