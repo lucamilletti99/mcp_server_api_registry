@@ -183,6 +183,8 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
           messages: [...messages.map(m => ({ role: m.role, content: m.content })), userMessage],
           model: selectedModel,
           system_prompt: systemPrompt || undefined, // Include custom system prompt if set
+          warehouse_id: selectedWarehouse || undefined, // Pass selected warehouse
+          catalog_schema: selectedCatalogSchema || undefined, // Pass selected catalog.schema
         }),
       });
 
@@ -311,6 +313,8 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
           messages: [...updatedMessages.map(m => ({ role: m.role, content: m.content })), userMessage],
           model: selectedModel,
           system_prompt: systemPrompt || undefined,
+          warehouse_id: selectedWarehouse || undefined, // Pass selected warehouse
+          catalog_schema: selectedCatalogSchema || undefined, // Pass selected catalog.schema
         }),
       });
 

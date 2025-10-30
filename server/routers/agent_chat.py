@@ -70,6 +70,8 @@ class AgentChatRequest(BaseModel):
     model: str = 'databricks-claude-sonnet-4'  # Claude Sonnet 4 (best model for tool calling)
     max_tokens: int = 4096
     system_prompt: Optional[str] = None  # Optional custom system prompt
+    warehouse_id: Optional[str] = None  # Selected SQL warehouse ID
+    catalog_schema: Optional[str] = None  # Selected catalog.schema (format: "catalog_name.schema_name")
 
 
 class AgentChatResponse(BaseModel):
@@ -262,7 +264,9 @@ async def run_agent_loop(
     max_iterations: int = 10,
     request: Request = None,
     custom_system_prompt: Optional[str] = None,
-    trace_id: Optional[str] = None
+    trace_id: Optional[str] = None,
+    warehouse_id: Optional[str] = None,
+    catalog_schema: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run the agentic loop.
 
@@ -327,39 +331,54 @@ When a user wants to register an API, follow this streamlined approach:
    - discover_api_endpoint (for specific endpoint testing)
    - register_api_in_registry (manual registration)
 
-3. **Always get the warehouse_id first** by calling list_warehouses before registration
-
 ## Examples
 
 **User: "Register the SEC API, here's the documentation: https://sec-api.io/docs"**
-→ Call list_warehouses to get warehouse_id
 → Call smart_register_api with:
   - api_name: "sec_api"
   - description: "SEC API for financial filings"
   - endpoint_url: "https://api.sec-api.io"
-  - warehouse_id: "<from list_warehouses>"
+  - warehouse_id: "<use the selected warehouse from context>"
   - documentation_url: "https://sec-api.io/docs"
   - api_key: "<if user provided>"
 
 **User: "I want to add the Alpha Vantage stock API, my API key is ABC123"**
-→ Call list_warehouses
 → Call smart_register_api with:
   - api_name: "alphavantage_stock"
   - description: "Alpha Vantage stock market data API"
   - endpoint_url: "https://www.alphavantage.co"
-  - warehouse_id: "<from list_warehouses>"
+  - warehouse_id: "<use the selected warehouse from context>"
   - api_key: "ABC123"
 
 ## General Guidelines
 
 1. **Always use smart_register_api for API registration** - it reduces the user journey from 4+ steps to 1-2 steps
 2. **Minimize back-and-forth** - the smart tools handle discovery automatically
-3. **Get warehouse_id early** - call list_warehouses before any SQL/registration operations
+3. **Use the provided warehouse_id and catalog/schema from context** - these are already selected by the user in the UI
 4. **Be transparent** - explain what the smart tools are doing (fetching docs, trying patterns, etc.)
 5. **Handle failures gracefully** - if smart tools fail, fall back to manual approach with clear explanation
 6. **Test after registration** - use call_api_endpoint to verify registered APIs work
 
 You are helpful, efficient, and minimize user friction through intelligent tool orchestration."""
+
+    # Add context about selected warehouse and catalog/schema if provided
+    context_additions = []
+    if warehouse_id:
+        context_additions.append(f"\n\n## Current Database Context\n\n**Selected SQL Warehouse ID:** `{warehouse_id}`")
+        context_additions.append(f"\n**IMPORTANT:** Always use this warehouse_id (`{warehouse_id}`) for any SQL operations (execute_dbsql, register_api_in_registry, check_api_registry, etc.) WITHOUT calling list_warehouses first. This is the user's currently selected warehouse.")
+
+    if catalog_schema:
+        # Parse catalog.schema
+        parts = catalog_schema.split('.')
+        if len(parts) == 2:
+            catalog_name, schema_name = parts
+            context_additions.append(f"\n\n**Selected Catalog.Schema:** `{catalog_name}.{schema_name}`")
+            context_additions.append(f"\n**IMPORTANT:** When executing SQL queries, use this catalog (`{catalog_name}`) and schema (`{schema_name}`) as defaults. For execute_dbsql calls, pass:")
+            context_additions.append(f"\n- `catalog=\"{catalog_name}\"`")
+            context_additions.append(f"\n- `schema=\"{schema_name}\"`")
+
+    if context_additions:
+        system_prompt += ''.join(context_additions)
 
     # Prepend system message to conversation
     messages = [{"role": "system", "content": system_prompt}] + user_messages.copy()
@@ -645,7 +664,9 @@ async def agent_chat(chat_request: AgentChatRequest, request: Request) -> AgentC
             max_iterations=10,
             request=request,
             custom_system_prompt=chat_request.system_prompt,
-            trace_id=trace_id
+            trace_id=trace_id,
+            warehouse_id=chat_request.warehouse_id,
+            catalog_schema=chat_request.catalog_schema
         )
 
         # Complete root span
