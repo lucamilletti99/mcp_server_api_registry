@@ -119,10 +119,19 @@ async def list_apis(
 
         # Wait for completion
         if statement.status.state != StatementState.SUCCEEDED:
-            raise HTTPException(
-                status_code=500,
-                detail=f'Query failed: {statement.status.state}'
-            )
+            # Check if it's a table not found error
+            error_message = statement.status.error.message if statement.status.error else 'Unknown error'
+
+            if 'TABLE_OR_VIEW_NOT_FOUND' in error_message or 'does not exist' in error_message.lower():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f'No api_registry table exists in {catalog}.{schema}'
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f'Query failed: {error_message}'
+                )
 
         # Parse results
         apis = []
@@ -144,10 +153,22 @@ async def list_apis(
             count=len(apis)
         )
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         print(f"Failed to list APIs: {e}")
         import traceback
         traceback.print_exc()
+
+        # Check if it's a table not found error in the exception message
+        error_str = str(e)
+        if 'TABLE_OR_VIEW_NOT_FOUND' in error_str or 'does not exist' in error_str.lower():
+            raise HTTPException(
+                status_code=404,
+                detail=f'No api_registry table exists in {catalog}.{schema}'
+            )
+
         raise HTTPException(
             status_code=500,
             detail=f'Failed to list APIs: {str(e)}'

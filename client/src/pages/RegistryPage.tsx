@@ -30,7 +30,7 @@ interface RegistryPageProps {
 
 export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: RegistryPageProps) {
   const [apis, setApis] = useState<RegisteredAPI[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<RegisteredAPI>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -41,6 +41,10 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
   useEffect(() => {
     if (selectedWarehouse && selectedCatalogSchema) {
       loadApis();
+    } else {
+      // Clear error if warehouse/catalog not selected
+      setError(null);
+      setApis([]);
     }
   }, [selectedWarehouse, selectedCatalogSchema]);
 
@@ -67,15 +71,17 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
       const response = await fetch(`/api/registry/list?${params.toString()}`);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to load APIs');
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to load APIs' }));
+        const errorMessage = errorData.detail || 'Failed to load APIs';
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       setApis(data.apis || []);
     } catch (error) {
       console.error('Failed to load APIs:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load APIs');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load APIs';
+      setError(errorMessage);
       setApis([]);
     } finally {
       setLoading(false);
@@ -276,11 +282,13 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-64">
             <AlertCircle className={`h-12 w-12 mb-4 ${isDark ? 'text-[#FF8A80]' : 'text-[#FF3621]'}`} />
-            <p className={`text-lg ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
+            <p className={`text-lg font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
               {error}
             </p>
-            <p className={`text-sm mt-2 ${isDark ? 'text-white/40' : 'text-gray-400'}`}>
-              {error.toLowerCase().includes('table') && 'No api_registry table exists in this schema'}
+            <p className={`text-sm mt-2 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
+              {error.toLowerCase().includes('table') || error.toLowerCase().includes('api_registry')
+                ? 'Create the api_registry table in this catalog.schema to register APIs'
+                : 'Please check your warehouse and catalog.schema selection'}
             </p>
           </div>
         ) : loading ? (
