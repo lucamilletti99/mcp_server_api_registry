@@ -579,13 +579,15 @@ export function ChatPageAgent({
           <div className="flex items-center gap-2">
             <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
               <SelectTrigger className={`w-[280px] ${
-                !tableValidation.exists && !tableValidation.checking
-                  ? "border-red-500"
-                  : ""
-              } ${
                 isDark
-                  ? "bg-black/20 border-white/20 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
+                  ? "bg-black/20 text-white"
+                  : "bg-white text-gray-900"
+              } ${
+                !tableValidation.exists && !tableValidation.checking
+                  ? "border-red-500 border-2"
+                  : isDark
+                  ? "border-white/20"
+                  : "border-gray-300"
               } backdrop-blur-sm`}>
                 <SelectValue placeholder="Select catalog.schema">
                   {selectedCatalogSchema || "Select catalog.schema"}

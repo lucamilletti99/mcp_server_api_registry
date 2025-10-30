@@ -285,11 +285,16 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
             <p className={`text-lg font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
               {error}
             </p>
-            <p className={`text-sm mt-2 ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
-              {error.toLowerCase().includes('table') || error.toLowerCase().includes('api_registry')
-                ? 'Create the api_registry table in this catalog.schema to register APIs'
-                : 'Please check your warehouse and catalog.schema selection'}
-            </p>
+            <div className={`text-sm mt-2 text-center max-w-md ${isDark ? 'text-white/60' : 'text-gray-600'}`}>
+              {error.toLowerCase().includes('table') || error.toLowerCase().includes('api_registry') ? (
+                <>
+                  <p>Switch to a catalog.schema with the api_registry table,</p>
+                  <p className="mt-1">or create the api_registry table in <span className="font-mono">{selectedCatalogSchema}</span></p>
+                </>
+              ) : (
+                <p>Please check your warehouse and catalog.schema selection</p>
+              )}
+            </div>
           </div>
         ) : loading ? (
           <div className="flex items-center justify-center h-64">
