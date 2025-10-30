@@ -13,6 +13,7 @@ from server.prompts import load_prompts
 from server.routers import router
 from server.routers.agent_chat import router as agent_router
 from server.routers.registry import router as registry_router
+from server.routers.db_resources import router as db_resources_router
 from server.tools import load_tools
 
 
@@ -82,6 +83,7 @@ app.add_middleware(
 app.include_router(router, prefix='/api', tags=['api'])
 app.include_router(agent_router, prefix='/api/agent', tags=['agent'])
 app.include_router(registry_router, prefix='/api/registry', tags=['registry'])
+app.include_router(db_resources_router, prefix='/api/db', tags=['database'])
 
 # ============================================================================
 # SERVE STATIC FILES FROM CLIENT BUILD DIRECTORY (MUST BE LAST!)

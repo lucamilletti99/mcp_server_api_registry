@@ -36,6 +36,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DatabaseService } from "@/fastapi_client";
 
 interface Model {
   id: string;
@@ -44,6 +45,21 @@ interface Model {
   supports_tools: boolean;
   context_window: number;
   type: string;
+}
+
+interface Warehouse {
+  id: string;
+  name: string;
+  state: string;
+  size?: string;
+  type?: string;
+}
+
+interface CatalogSchema {
+  catalog_name: string;
+  schema_name: string;
+  full_name: string;
+  comment?: string;
 }
 
 interface Message {
@@ -64,6 +80,10 @@ interface ChatPageAgentProps {
 export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>("");
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("");
+  const [catalogSchemas, setCatalogSchemas] = useState<CatalogSchema[]>([]);
+  const [selectedCatalogSchema, setSelectedCatalogSchema] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -79,6 +99,8 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
 
   useEffect(() => {
     fetchModels();
+    fetchWarehouses();
+    fetchCatalogSchemas();
   }, []);
 
   useEffect(() => {
@@ -93,6 +115,32 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
       setSelectedModel(data.default);
     } catch (error) {
       console.error("Failed to fetch models:", error);
+    }
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const data = await DatabaseService.listWarehousesApiDbWarehousesGet();
+      setWarehouses(data.warehouses || []);
+      // Set first warehouse as default if available
+      if (data.warehouses && data.warehouses.length > 0) {
+        setSelectedWarehouse(data.warehouses[0].id);
+      }
+    } catch (error) {
+      console.error("Failed to fetch warehouses:", error);
+    }
+  };
+
+  const fetchCatalogSchemas = async () => {
+    try {
+      const data = await DatabaseService.listAllCatalogSchemasApiDbCatalogSchemasGet();
+      setCatalogSchemas(data.catalog_schemas || []);
+      // Set first catalog.schema as default if available
+      if (data.catalog_schemas && data.catalog_schemas.length > 0) {
+        setSelectedCatalogSchema(data.catalog_schemas[0].full_name);
+      }
+    } catch (error) {
+      console.error("Failed to fetch catalog schemas:", error);
     }
   };
 
@@ -366,7 +414,7 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
             </Button>
           )}
         </div>
-        <div>
+        <div className="flex items-center gap-3">
           <Select value={selectedModel} onValueChange={setSelectedModel}>
             <SelectTrigger className={`w-[240px] ${
               isDark
@@ -398,6 +446,60 @@ export function ChatPageAgent({ onViewTrace }: ChatPageAgentProps = {}) {
                     <span className="text-xs text-muted-foreground">
                       {model.provider} • {model.context_window.toLocaleString()} tokens
                     </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+            <SelectTrigger className={`w-[200px] ${
+              isDark
+                ? "bg-black/20 border-white/20 text-white"
+                : "bg-white border-gray-300 text-gray-900"
+            } backdrop-blur-sm`}>
+              <SelectValue placeholder="Select warehouse">
+                {warehouses.find((w) => w.id === selectedWarehouse)?.name || "Select warehouse"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {warehouses.map((warehouse) => (
+                <SelectItem
+                  key={warehouse.id}
+                  value={warehouse.id}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium">{warehouse.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {warehouse.size} • {warehouse.state}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedCatalogSchema} onValueChange={setSelectedCatalogSchema}>
+            <SelectTrigger className={`w-[280px] ${
+              isDark
+                ? "bg-black/20 border-white/20 text-white"
+                : "bg-white border-gray-300 text-gray-900"
+            } backdrop-blur-sm`}>
+              <SelectValue placeholder="Select catalog.schema">
+                {selectedCatalogSchema || "Select catalog.schema"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {catalogSchemas.map((cs) => (
+                <SelectItem
+                  key={cs.full_name}
+                  value={cs.full_name}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium">{cs.full_name}</span>
+                    {cs.comment && (
+                      <span className="text-xs text-muted-foreground">{cs.comment}</span>
+                    )}
                   </div>
                 </SelectItem>
               ))}
