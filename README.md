@@ -16,7 +16,15 @@ This is a complete API discovery and management platform that runs on Databricks
 
 ### Prerequisites
 
-- Databricks workspace with Apps enabled
+**Workspace Requirements:**
+- Databricks Apps enabled (Public Preview)
+- Foundation Model API with `databricks-claude-sonnet-4` endpoint
+- At least one SQL Warehouse
+- Unity Catalog with an accessible catalog.schema
+
+See [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md) for detailed workspace setup requirements and troubleshooting.
+
+**Local Development:**
 - Python 3.12+ with `uv` package manager
 - Databricks CLI (`databricks`) v0.260.0+
 - (Optional) Claude CLI for MCP integration
@@ -253,6 +261,8 @@ AI: Here are your registered APIs:
 
 ## Troubleshooting
 
+**For detailed workspace requirements and setup issues, see [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md)**
+
 **Table not found error:**
 - Create the `api_registry` table in your selected catalog.schema
 - Or use a different catalog.schema that has the table
@@ -270,6 +280,13 @@ AI: Here are your registered APIs:
 - Check app logs: `uv run python dba_logz.py YOUR_APP_URL --search "ERROR"`
 - Verify warehouse has access to required catalogs
 - Try manual registration with `register_api_in_registry`
+
+**Databricks Apps not enabled:**
+- See [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md) for enabling preview features
+
+**Foundation Model endpoint errors:**
+- Verify `databricks-claude-sonnet-4` is available in your region
+- Check [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md) for regional availability
 
 ## License
 
