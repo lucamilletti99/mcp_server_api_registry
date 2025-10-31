@@ -631,7 +631,7 @@ export function ChatPageAgent({
             {!tableValidation.exists && !tableValidation.checking && (
               <div className="flex items-center gap-1 text-red-500" title={`No api_registry table exists in ${selectedCatalogSchema}. Switch to a catalog.schema with the api_registry table, or create the api_registry table in this schema.`}>
                 <AlertCircle className="h-4 w-4" />
-                <span className="text-xs">No table</span>
+                <span className="text-xs">No api_registry table in this schema</span>
               </div>
             )}
             {tableValidation.checking && (
@@ -660,6 +660,34 @@ export function ChatPageAgent({
                   I can help you discover, register, and manage API endpoints
                 </p>
               </div>
+
+              {/* Error Banner for Missing Table */}
+              {!tableValidation.exists && !tableValidation.checking && selectedCatalogSchema && (
+                <div className={`rounded-lg border-2 p-6 ${
+                  isDark
+                    ? "bg-red-500/10 border-red-500/30"
+                    : "bg-red-50 border-red-200"
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className={`h-6 w-6 flex-shrink-0 mt-0.5 ${
+                      isDark ? "text-[#FF8A80]" : "text-[#FF3621]"
+                    }`} />
+                    <div className="flex-1">
+                      <h3 className={`font-semibold text-lg mb-2 ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}>
+                        No api_registry table exists in {selectedCatalogSchema}
+                      </h3>
+                      <div className={`text-sm space-y-1 ${
+                        isDark ? "text-white/70" : "text-gray-700"
+                      }`}>
+                        <p>Switch to a catalog.schema with the api_registry table,</p>
+                        <p>or create the api_registry table in <span className="font-mono font-medium">{selectedCatalogSchema}</span></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Search Input */}
               <div className="relative">
