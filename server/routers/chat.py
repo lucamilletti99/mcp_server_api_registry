@@ -220,10 +220,11 @@ async def get_mcp_tools() -> List[Dict[str, Any]]:
     openai_tools = []
 
     # Get tools dynamically from FastMCP using public API
+    # get_tools() returns a dict, so iterate over values
     mcp_tools = await mcp.get_tools()
 
     # Convert to OpenAI format
-    for tool in mcp_tools:
+    for tool in mcp_tools.values():
         # For now, use basic schema without full parameter definitions
         # The model will infer parameters from the description
         openai_tool = {

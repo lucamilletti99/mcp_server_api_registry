@@ -101,11 +101,12 @@ async def load_mcp_tools_cached(force_reload: bool = False) -> List[Dict[str, An
     from server.app import mcp_server as mcp
 
     # Get tools directly from the MCP server instance using public API
+    # get_tools() returns a dict, so iterate over values
     mcp_tools = await mcp.get_tools()
 
     # Convert to OpenAI format
     openai_tools = []
-    for tool in mcp_tools:
+    for tool in mcp_tools.values():
         openai_tool = {
             "type": "function",
             "function": {

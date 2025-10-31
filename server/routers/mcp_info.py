@@ -57,20 +57,22 @@ async def get_mcp_discovery() -> Dict[str, Any]:
   tools_list = []
 
   # Get prompts dynamically from FastMCP using public API
+  # get_prompts() returns a dict, so iterate over values
   prompts = await mcp.get_prompts()
   prompts_list = [
     {
       'name': prompt.key,
       'description': prompt.description or f'{prompt.key.replace("_", " ").title()}',
     }
-    for prompt in prompts
+    for prompt in prompts.values()
   ]
 
   # Get tools dynamically from FastMCP using public API
+  # get_tools() returns a dict, so iterate over values
   tools = await mcp.get_tools()
   tools_list = [
     {'name': tool.key, 'description': tool.description or f'{tool.key.replace("_", " ").title()}'}
-    for tool in tools
+    for tool in tools.values()
   ]
 
   return {'prompts': prompts_list, 'tools': tools_list, 'servername': servername}
