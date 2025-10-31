@@ -71,8 +71,10 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
         if not statement:
             continue
 
-        print(f"Executing statement {i}/{len(statements)}...")
-        print(f"  {statement[:100]}...")
+        print(f"\nExecuting statement {i}/{len(statements)}...")
+        # Show first 150 chars of statement
+        preview = statement.replace('\n', ' ')[:150]
+        print(f"  {preview}...")
 
         try:
             result = w.statement_execution.execute_statement(
@@ -82,14 +84,17 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
             )
 
             if result.status.state == StatementState.SUCCEEDED:
-                print(f"  ✅ Success\n")
-            else:
+                print(f"  ✅ Success")
+            elif result.status.state == StatementState.FAILED:
                 error_msg = result.status.error.message if result.status.error else 'Unknown error'
-                print(f"  ⚠️  Warning: {error_msg}\n")
+                print(f"  ❌ Failed: {error_msg}")
+                # Don't exit, continue with verification
+            else:
+                print(f"  ⚠️  Status: {result.status.state}")
 
         except Exception as e:
-            print(f"  ❌ Error: {str(e)}\n")
-            # Continue with other statements even if one fails
+            print(f"  ❌ Error: {str(e)}")
+            # Continue with verification even if statement fails
             continue
 
     # Verify table was created
@@ -97,11 +102,14 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
     verify_query = f"DESCRIBE TABLE {catalog}.{schema}.api_registry"
 
     try:
+        print(f"   Running: {verify_query}")
         result = w.statement_execution.execute_statement(
             warehouse_id=warehouse_id,
             statement=verify_query,
             wait_timeout='30s'
         )
+
+        print(f"   Query status: {result.status.state}")
 
         if result.status.state == StatementState.SUCCEEDED:
             print(f"✅ Table {catalog}.{schema}.api_registry created successfully!\n")
@@ -109,17 +117,28 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
             # Show table structure
             if result.result and result.result.data_array:
                 print("📋 Table structure:")
-                columns = [col.name for col in result.manifest.schema.columns]
-                for row in result.result.data_array[:10]:  # Show first 10 columns
+                for row in result.result.data_array[:15]:  # Show first 15 columns
                     col_name = row[0] if len(row) > 0 else ''
                     col_type = row[1] if len(row) > 1 else ''
                     print(f"  - {col_name}: {col_type}")
 
             print(f"\n🎉 Setup complete! You can now use {catalog}.{schema}.api_registry")
             return True
+        else:
+            error_msg = result.status.error.message if result.status.error else 'Unknown error'
+            print(f"⚠️  Verification query did not succeed: {error_msg}")
+            print(f"   The table may have been created but verification failed.")
+            print(f"   Try running: DESCRIBE TABLE {catalog}.{schema}.api_registry")
+            return False
 
     except Exception as e:
         print(f"❌ Failed to verify table: {str(e)}")
+        print(f"   This could mean:")
+        print(f"   1. The table was created but DESCRIBE timed out")
+        print(f"   2. You don't have permissions to describe the table")
+        print(f"   3. The warehouse is slow to respond")
+        print(f"\n💡 Try checking manually in Databricks:")
+        print(f"   SELECT * FROM {catalog}.{schema}.api_registry LIMIT 1;")
         return False
 
 
