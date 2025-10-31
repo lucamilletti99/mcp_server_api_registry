@@ -126,20 +126,57 @@ TBLPROPERTIES (
 
 ### 3. Deploy to Databricks
 
-Deploy from your local machine to Databricks Apps:
+Deploy from your local machine to Databricks Apps.
+
+**First Deployment (App doesn't exist yet)**
+
+Create and deploy the app in one step:
 
 ```bash
-# Deploy with default name (from .env.local)
+# First time deployment - creates the app and deploys
+./deploy.sh --create
+
+# OR with a custom app name
+./deploy.sh --app-name mcp-my-api-registry --create
+```
+
+The `--create` flag:
+- Creates the Databricks App if it doesn't exist
+- Then deploys your code to it
+- **Use this for your very first deployment**
+
+**Subsequent Deployments (App already exists)**
+
+After the app is created, just deploy updates:
+
+```bash
+# Update existing app with latest code
 ./deploy.sh
 
-# OR deploy with a custom app name (must start with 'mcp-')
-./deploy.sh --app-name mcp-my-custom-registry
+# OR update with verbose output for debugging
+./deploy.sh --verbose
+```
 
-# Create app if it doesn't exist and deploy
-./deploy.sh --app-name mcp-my-api-registry --create
+**Common Deployment Scenarios:**
 
-# Verbose mode for debugging
-./deploy.sh --app-name mcp-test-registry --verbose
+```bash
+# First time: Create app with default name from .env.local
+./deploy.sh --create
+
+# First time: Create app with custom name
+./deploy.sh --app-name mcp-prod-registry --create
+
+# Update existing app after code changes
+./deploy.sh
+
+# Deploy to different app name (must exist already)
+./deploy.sh --app-name mcp-dev-registry
+
+# Debug deployment issues
+./deploy.sh --verbose
+
+# Create new environment (e.g., staging)
+./deploy.sh --app-name mcp-staging-registry --create
 ```
 
 **App Naming Rules:**
@@ -147,14 +184,20 @@ Deploy from your local machine to Databricks Apps:
 - Use lowercase letters, numbers, and hyphens only
 - Examples: `mcp-api-registry`, `mcp-prod-registry`, `mcp-dev-1`
 
-This script will:
-- Validate the app name (must start with `mcp-`)
-- Build the frontend
-- Package the Python backend
-- Upload everything to your Databricks workspace
-- Deploy as a Databricks App
+**What the deployment script does:**
+1. Shows configuration summary
+2. Validates the app name (must start with `mcp-`)
+3. Builds the frontend
+4. Packages the Python backend
+5. Uploads everything to your Databricks workspace
+6. Deploys as a Databricks App
 
 Your app will be available at: `https://your-app.databricksapps.com`
+
+**Troubleshooting:**
+- **"App not found"** → Use `--create` flag to create it first
+- **Build errors** → Use `--verbose` to see detailed output
+- **Authentication failed** → Run `./setup.sh` to reconfigure
 
 ### 4. (Optional) Add MCP Server to Claude CLI
 
