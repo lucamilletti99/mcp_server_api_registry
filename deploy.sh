@@ -73,6 +73,16 @@ if [ -n "$CUSTOM_APP_NAME" ]; then
   # Override DATABRICKS_APP_NAME with custom name
   export DATABRICKS_APP_NAME="$CUSTOM_APP_NAME"
   echo "✅ App name validated: $DATABRICKS_APP_NAME"
+
+  # Update DBA_SOURCE_CODE_PATH to match the custom app name
+  # Extract the directory part and replace just the app folder name
+  if [ -n "$DBA_SOURCE_CODE_PATH" ]; then
+    # Get the parent directory
+    PARENT_DIR=$(dirname "$DBA_SOURCE_CODE_PATH")
+    # Use custom app name for the folder
+    export DBA_SOURCE_CODE_PATH="$PARENT_DIR/$CUSTOM_APP_NAME"
+    echo "📁 Updated workspace path: $DBA_SOURCE_CODE_PATH"
+  fi
 fi
 
 # Validate required configuration
@@ -318,23 +328,40 @@ print_timing "Frontend build completed"
 print_timing "Starting workspace setup"
 echo "📂 Creating workspace directory: $DBA_SOURCE_CODE_PATH"
 
+MKDIR_OUTPUT=""
+MKDIR_SUCCESS=false
+
 if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
-  if ! databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE" 2>/dev/null; then
-    echo "❌ Failed to create workspace directory"
-    echo "💡 Path: $DBA_SOURCE_CODE_PATH"
-    echo "💡 Check if you have permissions to create directories in Workspace"
-    echo "💡 Try: databricks workspace mkdirs \"$DBA_SOURCE_CODE_PATH\" --profile $DATABRICKS_CONFIG_PROFILE"
-    exit 1
+  if MKDIR_OUTPUT=$(databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE" 2>&1); then
+    MKDIR_SUCCESS=true
   fi
 else
-  if ! databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" 2>/dev/null; then
-    echo "❌ Failed to create workspace directory"
-    echo "💡 Path: $DBA_SOURCE_CODE_PATH"
-    echo "💡 Check if you have permissions to create directories in Workspace"
-    echo "💡 Try: databricks workspace mkdirs \"$DBA_SOURCE_CODE_PATH\""
-    exit 1
+  if MKDIR_OUTPUT=$(databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" 2>&1); then
+    MKDIR_SUCCESS=true
   fi
 fi
+
+if [ "$MKDIR_SUCCESS" = false ]; then
+  echo "❌ Failed to create workspace directory"
+  echo ""
+  echo "Error details:"
+  echo "$MKDIR_OUTPUT"
+  echo ""
+  echo "💡 Path: $DBA_SOURCE_CODE_PATH"
+  echo "💡 Possible causes:"
+  echo "   1. You don't have permissions to create directories in /Workspace/Users/"
+  echo "   2. The parent directory doesn't exist"
+  echo "   3. Invalid characters in the path"
+  echo ""
+  echo "💡 Try manually creating the directory:"
+  if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
+    echo "   databricks workspace mkdirs \"$DBA_SOURCE_CODE_PATH\" --profile $DATABRICKS_CONFIG_PROFILE"
+  else
+    echo "   databricks workspace mkdirs \"$DBA_SOURCE_CODE_PATH\""
+  fi
+  exit 1
+fi
+
 echo "✅ Workspace directory created"
 
 echo "📤 Syncing source code to workspace..."
