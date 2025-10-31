@@ -142,6 +142,21 @@ fi
 echo "✅ Databricks authentication successful"
 print_timing "Authentication completed"
 
+# Display configuration summary
+echo ""
+echo "📋 Deployment Configuration"
+echo "============================"
+echo "App Name:              $DATABRICKS_APP_NAME"
+echo "Workspace Path:        $DBA_SOURCE_CODE_PATH"
+echo "Authentication:        $DATABRICKS_AUTH_TYPE"
+if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
+  echo "Profile:               $DATABRICKS_CONFIG_PROFILE"
+else
+  echo "Databricks Host:       $DATABRICKS_HOST"
+fi
+echo "============================"
+echo ""
+
 # Function to display app info
 display_app_info() {
   echo ""
@@ -235,62 +250,152 @@ print_timing "Starting requirements generation"
 echo "📦 Generating requirements.txt..."
 if [ "$VERBOSE" = true ]; then
   echo "Using custom script to avoid editable installs..."
-  uv run python scripts/generate_semver_requirements.py
-else
-  uv run python scripts/generate_semver_requirements.py
 fi
+
+if ! uv run python scripts/generate_semver_requirements.py; then
+  echo "❌ Failed to generate requirements.txt"
+  echo "💡 Check if pyproject.toml exists and is valid"
+  echo "💡 Try running: uv run python scripts/generate_semver_requirements.py"
+  exit 1
+fi
+
+echo "✅ Requirements generated successfully"
 print_timing "Requirements generation completed"
 
 # Build frontend
 print_timing "Starting frontend build"
 echo "🏗️  Building frontend..."
+
+# Check if node_modules exists
+if [ ! -d "client/node_modules" ]; then
+  echo "⚠️  node_modules not found. Installing dependencies first..."
+  cd client
+  if [ "$VERBOSE" = true ]; then
+    npm install
+  else
+    npm install > /dev/null 2>&1
+  fi
+  if [ $? -ne 0 ]; then
+    echo "❌ npm install failed"
+    echo "💡 Try running: cd client && npm install"
+    exit 1
+  fi
+  cd ..
+  echo "✅ Dependencies installed"
+fi
+
+# Build the frontend
 cd client
 if [ "$VERBOSE" = true ]; then
   npm run build
+  BUILD_EXIT_CODE=$?
 else
-  npm run build > /dev/null 2>&1
+  BUILD_OUTPUT=$(npm run build 2>&1)
+  BUILD_EXIT_CODE=$?
 fi
+
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
+  cd ..
+  echo "❌ Frontend build failed"
+  echo ""
+  echo "Error details:"
+  if [ "$VERBOSE" != true ]; then
+    echo "$BUILD_OUTPUT"
+  fi
+  echo ""
+  echo "💡 Troubleshooting steps:"
+  echo "   1. Check if client/package.json exists"
+  echo "   2. Try: cd client && npm install && npm run build"
+  echo "   3. Run with --verbose flag to see full output: ./deploy.sh --verbose"
+  exit 1
+fi
+
 cd ..
 echo "✅ Frontend build complete"
 print_timing "Frontend build completed"
 
 # Create workspace directory and upload source
 print_timing "Starting workspace setup"
-echo "📂 Creating workspace directory..."
+echo "📂 Creating workspace directory: $DBA_SOURCE_CODE_PATH"
+
 if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
-  databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE"
+  if ! databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE" 2>/dev/null; then
+    echo "❌ Failed to create workspace directory"
+    echo "💡 Path: $DBA_SOURCE_CODE_PATH"
+    echo "💡 Check if you have permissions to create directories in Workspace"
+    echo "💡 Try: databricks workspace mkdirs \"$DBA_SOURCE_CODE_PATH\" --profile $DATABRICKS_CONFIG_PROFILE"
+    exit 1
+  fi
 else
-  databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH"
+  if ! databricks workspace mkdirs "$DBA_SOURCE_CODE_PATH" 2>/dev/null; then
+    echo "❌ Failed to create workspace directory"
+    echo "💡 Path: $DBA_SOURCE_CODE_PATH"
+    echo "💡 Check if you have permissions to create directories in Workspace"
+    echo "💡 Try: databricks workspace mkdirs \"$DBA_SOURCE_CODE_PATH\""
+    exit 1
+  fi
 fi
 echo "✅ Workspace directory created"
 
 echo "📤 Syncing source code to workspace..."
 # Use databricks sync to properly update all files including requirements.txt
 if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
-  databricks sync . "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE"
+  if ! databricks sync . "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE"; then
+    echo "❌ Failed to sync source code to workspace"
+    echo "💡 Check network connectivity and workspace permissions"
+    exit 1
+  fi
 else
-  databricks sync . "$DBA_SOURCE_CODE_PATH"
+  if ! databricks sync . "$DBA_SOURCE_CODE_PATH"; then
+    echo "❌ Failed to sync source code to workspace"
+    echo "💡 Check network connectivity and workspace permissions"
+    exit 1
+  fi
 fi
-echo "✅ Source code uploaded"
+echo "✅ Source code synced successfully"
 print_timing "Workspace setup completed"
 
 # Deploy to Databricks
 print_timing "Starting Databricks deployment"
-echo "🚀 Deploying to Databricks..."
+echo "🚀 Deploying app '$DATABRICKS_APP_NAME' to Databricks..."
+echo "   This may take several minutes..."
 
+DEPLOY_SUCCESS=false
 if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
   if [ "$VERBOSE" = true ]; then
-    databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH" --debug --profile "$DATABRICKS_CONFIG_PROFILE"
+    if databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH" --debug --profile "$DATABRICKS_CONFIG_PROFILE"; then
+      DEPLOY_SUCCESS=true
+    fi
   else
-    databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE"
+    if databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH" --profile "$DATABRICKS_CONFIG_PROFILE"; then
+      DEPLOY_SUCCESS=true
+    fi
   fi
 else
   if [ "$VERBOSE" = true ]; then
-    databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH" --debug
+    if databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH" --debug; then
+      DEPLOY_SUCCESS=true
+    fi
   else
-    databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH"
+    if databricks apps deploy "$DATABRICKS_APP_NAME" --source-code-path "$DBA_SOURCE_CODE_PATH"; then
+      DEPLOY_SUCCESS=true
+    fi
   fi
 fi
+
+if [ "$DEPLOY_SUCCESS" = false ]; then
+  echo ""
+  echo "❌ Deployment failed"
+  echo ""
+  echo "💡 Troubleshooting steps:"
+  echo "   1. Check if Databricks Apps is enabled in your workspace"
+  echo "   2. Verify app.yaml exists and is valid"
+  echo "   3. Check app logs: databricks apps logs $DATABRICKS_APP_NAME"
+  echo "   4. Run with --verbose for detailed output: ./deploy.sh --verbose"
+  echo "   5. See WORKSPACE_REQUIREMENTS.md for prerequisites"
+  exit 1
+fi
+
 print_timing "Databricks deployment completed"
 
 echo ""
