@@ -13,7 +13,7 @@ export DATABRICKS_APP_URL="https://your-app.databricksapps.com"  # From ./app_st
 
 # Add to Claude (user-scoped)
 claude mcp add api-registry --scope user -- \
-  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/mcp_server_api_registry.git dba-mcp-proxy \
+  uvx --refresh --from git+ssh://git@github.com/lucamilletti99/mcp_server_api_registry.git dba-mcp-proxy \
   --databricks-host $DATABRICKS_HOST \
   --databricks-app-url $DATABRICKS_APP_URL
 ```
@@ -31,7 +31,7 @@ export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
 export DATABRICKS_APP_URL="http://localhost:8000"
 
 claude mcp add api-registry-local --scope local -- \
-  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/mcp_server_api_registry.git dba-mcp-proxy \
+  uvx --refresh --from git+ssh://git@github.com/lucamilletti99/mcp_server_api_registry.git dba-mcp-proxy \
   --databricks-host $DATABRICKS_HOST \
   --databricks-app-url $DATABRICKS_APP_URL
 ```

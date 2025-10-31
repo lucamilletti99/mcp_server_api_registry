@@ -35,7 +35,7 @@ See [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md) for detailed workspac
 
 ```bash
 # On your local machine (not in Databricks):
-git clone https://github.com/YOUR-USERNAME/mcp_server_api_registry.git
+git clone https://github.com/lucamilletti99/mcp_server_api_registry.git
 cd mcp_server_api_registry
 
 # Run interactive setup
@@ -103,7 +103,7 @@ export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
 
 # Add to Claude
 claude mcp add api-registry --scope user -- \
-  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/mcp_server_api_registry.git dba-mcp-proxy \
+  uvx --refresh --from git+ssh://git@github.com/lucamilletti99/mcp_server_api_registry.git dba-mcp-proxy \
   --databricks-host $DATABRICKS_HOST \
   --databricks-app-url $DATABRICKS_APP_URL
 ```
