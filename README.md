@@ -82,11 +82,26 @@ uv run python setup_table.py your_catalog your_schema
 Deploy from your local machine to Databricks Apps:
 
 ```bash
-# Run from your local machine (requires Databricks CLI authentication)
+# Deploy with default name (from .env.local)
 ./deploy.sh
+
+# OR deploy with a custom app name (must start with 'mcp-')
+./deploy.sh --app-name mcp-my-custom-registry
+
+# Create app if it doesn't exist and deploy
+./deploy.sh --app-name mcp-my-api-registry --create
+
+# Verbose mode for debugging
+./deploy.sh --app-name mcp-test-registry --verbose
 ```
 
+**App Naming Rules:**
+- App names **must start with `mcp-`**
+- Use lowercase letters, numbers, and hyphens only
+- Examples: `mcp-api-registry`, `mcp-prod-registry`, `mcp-dev-1`
+
 This script will:
+- Validate the app name (must start with `mcp-`)
 - Build the frontend
 - Package the Python backend
 - Upload everything to your Databricks workspace
@@ -167,6 +182,36 @@ name: mcp-server-api-registry
 display_name: API Registry MCP Server
 description: AI-powered API discovery and management platform
 ```
+
+## Deployment Tips
+
+### Multiple Deployments
+
+You can deploy multiple instances of the app for different purposes (dev, staging, prod):
+
+```bash
+# Development instance
+./deploy.sh --app-name mcp-dev-api-registry --create
+
+# Staging instance
+./deploy.sh --app-name mcp-staging-api-registry --create
+
+# Production instance
+./deploy.sh --app-name mcp-prod-api-registry --create
+```
+
+Each deployment will have its own:
+- Unique URL
+- Independent database (if using different catalogs/schemas)
+- Separate authentication scope
+- Isolated API registry data
+
+### Best Practices
+
+- **Use descriptive names**: `mcp-{environment}-{purpose}` (e.g., `mcp-prod-customer-apis`)
+- **Test with `--verbose`**: See detailed deployment logs if something fails
+- **Use `--create`**: Automatically creates the app if it doesn't exist
+- **Keep names short**: Easier to reference in MCP setup commands
 
 ## Development
 

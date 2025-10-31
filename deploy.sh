@@ -2,26 +2,41 @@
 
 # Deploy the Databricks App Template to Databricks.
 # For configuration options see README.md and .env.local.
-# Usage: ./deploy.sh [--verbose] [--create]
+# Usage: ./deploy.sh [--verbose] [--create] [--app-name <name>]
 
 set -e
 
 # Parse command line arguments
 VERBOSE=false
 CREATE_APP=false
-for arg in "$@"; do
-  case $arg in
+CUSTOM_APP_NAME=""
+while [[ $# -gt 0 ]]; do
+  case $1 in
     --verbose)
       VERBOSE=true
       echo "🔍 Verbose mode enabled"
+      shift
       ;;
     --create)
       CREATE_APP=true
       echo "🔧 App creation mode enabled"
+      shift
+      ;;
+    --app-name)
+      CUSTOM_APP_NAME="$2"
+      shift 2
       ;;
     *)
-      echo "Unknown argument: $arg"
-      echo "Usage: ./deploy.sh [--verbose] [--create]"
+      echo "Unknown argument: $1"
+      echo "Usage: ./deploy.sh [--verbose] [--create] [--app-name <name>]"
+      echo ""
+      echo "Options:"
+      echo "  --verbose       Enable verbose output"
+      echo "  --create        Create the app if it doesn't exist"
+      echo "  --app-name      Custom app name (must start with 'mcp-')"
+      echo ""
+      echo "Example:"
+      echo "  ./deploy.sh --app-name mcp-my-custom-registry"
       exit 1
       ;;
   esac
@@ -43,6 +58,23 @@ then
   set +a
 fi
 
+# Handle custom app name if provided
+if [ -n "$CUSTOM_APP_NAME" ]; then
+  echo "🏷️  Using custom app name: $CUSTOM_APP_NAME"
+
+  # Validate app name starts with "mcp-"
+  if [[ ! "$CUSTOM_APP_NAME" =~ ^mcp- ]]; then
+    echo "❌ Error: App name must start with 'mcp-'"
+    echo "   Provided: $CUSTOM_APP_NAME"
+    echo "   Example: mcp-my-custom-registry"
+    exit 1
+  fi
+
+  # Override DATABRICKS_APP_NAME with custom name
+  export DATABRICKS_APP_NAME="$CUSTOM_APP_NAME"
+  echo "✅ App name validated: $DATABRICKS_APP_NAME"
+fi
+
 # Validate required configuration
 if [ -z "$DBA_SOURCE_CODE_PATH" ]
 then
@@ -52,7 +84,7 @@ fi
 
 if [ -z "$DATABRICKS_APP_NAME" ]
 then
-  echo "❌ DATABRICKS_APP_NAME is not set. Please run ./setup.sh first."
+  echo "❌ DATABRICKS_APP_NAME is not set. Please run ./setup.sh first or provide --app-name."
   exit 1
 fi
 
