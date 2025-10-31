@@ -294,7 +294,6 @@ if [ "$skip_env" != "true" ]; then
     echo ""
     echo "🚀 App Configuration"
     echo "--------------------"
-    echo "If you haven't created a Databricks App yet, you can create a custom app from the UI:"
     if [ "$DATABRICKS_AUTH_TYPE" = "profile" ]; then
         WORKSPACE_HOST=$(databricks current-user me --profile "$DATABRICKS_CONFIG_PROFILE" --output json 2>/dev/null | grep -o '"workspaceUrl":"[^"]*"' | cut -d'"' -f4)
     else
@@ -307,8 +306,30 @@ if [ "$skip_env" != "true" ]; then
         echo "📖 https://your-workspace.cloud.databricks.com/apps/create"
     fi
     echo ""
-    prompt_with_default "App Name for Deployment" "${DATABRICKS_APP_NAME:-my-databricks-app}" "DATABRICKS_APP_NAME"
-    
+    echo "📋 App Naming Requirements:"
+    echo "   - Must start with 'mcp-'"
+    echo "   - Use lowercase letters, numbers, and hyphens only"
+    echo "   - Examples: mcp-api-registry, mcp-prod-registry, mcp-dev-1"
+    echo ""
+
+    # Loop until valid app name is provided
+    while true; do
+        prompt_with_default "App Name for Deployment" "${DATABRICKS_APP_NAME:-mcp-api-registry}" "DATABRICKS_APP_NAME"
+
+        # Validate app name starts with 'mcp-'
+        if [[ "$DATABRICKS_APP_NAME" =~ ^mcp- ]]; then
+            echo "✅ App name validated: $DATABRICKS_APP_NAME"
+            break
+        else
+            echo "❌ Error: App name must start with 'mcp-'"
+            echo "   You entered: $DATABRICKS_APP_NAME"
+            echo "   Please try again with a valid name (e.g., mcp-${DATABRICKS_APP_NAME})"
+            echo ""
+            # Clear the invalid value
+            DATABRICKS_APP_NAME=""
+        fi
+    done
+
     # Update the default source path to use the chosen app name
     if [ -z "$DBA_SOURCE_CODE_PATH" ]; then
         if [ -n "$DATABRICKS_USER" ]; then

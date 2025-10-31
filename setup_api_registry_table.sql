@@ -31,8 +31,3 @@ COMMENT 'Registry of external API endpoints for discovery and management'
 TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true'
 );
-
--- Create indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_api_name ON {catalog}.{schema}.api_registry(api_name);
-CREATE INDEX IF NOT EXISTS idx_status ON {catalog}.{schema}.api_registry(status);
-CREATE INDEX IF NOT EXISTS idx_user ON {catalog}.{schema}.api_registry(user_who_requested);

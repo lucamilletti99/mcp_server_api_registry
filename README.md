@@ -45,8 +45,11 @@ cd mcp_server_api_registry
 This will:
 - Install `uv` if not present (on your local machine)
 - Configure Databricks CLI authentication
+- **Configure your app name** (must start with `mcp-`)
 - Install all Python dependencies locally
 - Create `.env.local` configuration file
+
+**Important:** The app name you choose during setup will be saved in `.env.local` and used automatically by `./deploy.sh`. You can override it at deployment time with the `--app-name` flag if needed.
 
 ### 2. Create the API Registry Table
 
@@ -58,11 +61,8 @@ The app needs a table to store registered APIs. Use the provided script to creat
 # The script automatically loads your .env.local configuration
 uv run python setup_table.py your_catalog your_schema
 
-# Example with actual catalog/schema names
-uv run python setup_table.py lucam_ws_demo custom_mcp_server
-
 # Optional: specify a warehouse ID
-uv run python setup_table.py lucam_ws_demo custom_mcp_server --warehouse-id abc123
+uv run python setup_table.py your_catalog your_schema --warehouse-id abc123
 ```
 
 The script will:
