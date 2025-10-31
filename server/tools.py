@@ -17,7 +17,9 @@ from fastmcp.server.dependencies import get_http_headers
 def get_workspace_client() -> WorkspaceClient:
   """Get a WorkspaceClient with on-behalf-of user authentication.
 
-  Falls back to OAuth service principal authentication if user token is not available.
+  Falls back to OAuth service principal authentication if:
+  - User token is not available
+  - User has no access to SQL warehouses
 
   Returns:
       WorkspaceClient configured with appropriate authentication
@@ -29,17 +31,34 @@ def get_workspace_client() -> WorkspaceClient:
   user_token = headers.get('x-forwarded-access-token')
 
   if user_token:
-    # Use on-behalf-of authentication with user's token
-    # Create Config with ONLY token auth to avoid OAuth conflict
-    # auth_type='pat' forces token-only auth and disables auto-detection
-    print(f'🔐 Using on-behalf-of authentication (user token)')
+    # Try on-behalf-of authentication with user's token
+    print(f'🔐 Attempting OBO authentication for user')
     config = Config(host=host, token=user_token, auth_type='pat')
-    return WorkspaceClient(config=config)
+    user_client = WorkspaceClient(config=config)
+
+    # Verify user has access to SQL warehouses
+    has_warehouse_access = False
+
+    try:
+      warehouses = list(user_client.warehouses.list())
+      if warehouses:
+        has_warehouse_access = True
+        print(f'✅ User has access to {len(warehouses)} warehouse(s)')
+    except Exception as e:
+      print(f'⚠️  User cannot list warehouses: {str(e)}')
+
+    # If user has warehouse access, use OBO; otherwise fallback to service principal
+    if has_warehouse_access:
+      print(f'✅ Using OBO authentication - user has warehouse access')
+      return user_client
+    else:
+      print(f'⚠️  User has no warehouse access, falling back to service principal')
+      return WorkspaceClient(host=host)
   else:
     # Fall back to OAuth service principal authentication
     # WorkspaceClient will automatically use DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET
     # which are injected by Databricks Apps platform
-    print(f'🔐 Using OAuth service principal authentication (fallback)')
+    print(f'⚠️  No user token found, falling back to service principal')
     return WorkspaceClient(host=host)
 
 
@@ -787,6 +806,7 @@ def load_tools(mcp_server):
     warehouse_id: str,
     catalog: str,
     schema: str,
+    documentation_url: str = None,
     http_method: str = 'GET',
     auth_type: str = 'none',
     token_info: str = '',
@@ -805,6 +825,7 @@ def load_tools(mcp_server):
         warehouse_id: SQL warehouse ID to use for database operations
         catalog: Catalog name (required)
         schema: Schema name (required)
+        documentation_url: Optional URL to API documentation for endpoint discovery
         http_method: HTTP method (default: GET)
         auth_type: Authentication type (none, api_key, bearer, basic, etc.)
         token_info: Authentication token or API key (if applicable)
@@ -871,7 +892,7 @@ def load_tools(mcp_server):
       insert_query = f"""
 INSERT INTO {table_name}
 (api_id, api_name, description, user_who_requested, modified_date,
- api_endpoint, http_method, auth_type, token_info, request_params,
+ api_endpoint, documentation_url, http_method, auth_type, token_info, request_params,
  status, validation_message, created_at)
 VALUES (
   '{api_id}',
@@ -880,6 +901,7 @@ VALUES (
   '{escape_sql_string(username)}',
   '{modified_date}',
   '{escape_sql_string(api_endpoint)}',
+  '{escape_sql_string(documentation_url) if documentation_url else 'NULL'}',
   '{escape_sql_string(http_method.upper())}',
   '{escape_sql_string(auth_type)}',
   '{escape_sql_string(token_info)}',
@@ -1104,37 +1126,92 @@ VALUES (
 
         print(f'✅ Found working endpoint: {working_endpoint}')
       else:
-        # No patterns worked, try the original endpoint with discovery
-        print(f'🔍 Trying original endpoint with discovery...')
-        discovery_result = discover_api_endpoint(endpoint_url, api_key)
+        # No patterns worked, use the original endpoint
+        print(f'🔍 No patterns matched, will register the original endpoint')
+        working_endpoint = endpoint_url
+        if api_key:
+          auth_method = 'api_key'
+          final_api_key = api_key
 
-        if discovery_result.get('success') and discovery_result.get('status_code') == 200:
-          working_endpoint = endpoint_url
-          if discovery_result.get('auth_detected', {}).get('authenticated'):
-            auth_method = 'api_key'
-            final_api_key = api_key or ''
-        else:
-          # Still register it, but as pending
-          working_endpoint = endpoint_url
-          if api_key:
-            auth_method = 'api_key'
-            final_api_key = api_key
-
-      # Step 3: Register the API
+      # Step 3: Register the API using the helper logic
       print(f'📝 Registering API in registry...')
-      registration_result = register_api_in_registry(
-        api_name=api_name,
-        description=description,
-        api_endpoint=working_endpoint,
-        warehouse_id=warehouse_id,
-        http_method='GET',
-        auth_type=auth_method,
-        token_info=final_api_key,
-        request_params='{}',
-        validate_after_register=True,
-        catalog=catalog,
-        schema=schema,
-      )
+
+      # Get authenticated user info for user_who_requested field
+      headers = get_http_headers()
+      user_token = headers.get('x-forwarded-access-token')
+
+      # Try to get username from authenticated user
+      username = 'unknown'
+      if user_token:
+        try:
+          config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token, auth_type='pat')
+          w = WorkspaceClient(config=config)
+          current_user = w.current_user.me()
+          # Extract username from email (e.g., luca.milletti@databricks.com -> luca.milletti)
+          username = current_user.user_name.split('@')[0] if current_user.user_name else 'unknown'
+        except Exception:
+          username = 'unknown'
+
+      # Generate unique API ID
+      api_id = f'api-{str(uuid.uuid4())[:8]}'
+
+      # Get current timestamp
+      created_at = datetime.utcnow().isoformat() + 'Z'
+      modified_date = created_at
+
+      # Validate the API
+      print(f'🔍 Validating API endpoint: {working_endpoint}')
+      validation_result = _validate_api_endpoint(working_endpoint, 'GET', auth_method, final_api_key, timeout=10)
+      status = validation_result['status']
+      validation_message = validation_result['validation_message']
+
+      # Escape single quotes in strings for SQL
+      def escape_sql_string(s):
+        return s.replace("'", "''") if s else ''
+
+      # Build INSERT query
+      table_name = f'{catalog}.{schema}.api_registry'
+      insert_query = f"""
+INSERT INTO {table_name}
+(api_id, api_name, description, user_who_requested, modified_date,
+ api_endpoint, documentation_url, http_method, auth_type, token_info, request_params,
+ status, validation_message, created_at)
+VALUES (
+  '{api_id}',
+  '{escape_sql_string(api_name)}',
+  '{escape_sql_string(description)}',
+  '{escape_sql_string(username)}',
+  '{modified_date}',
+  '{escape_sql_string(working_endpoint)}',
+  '{escape_sql_string(documentation_url) if documentation_url else 'NULL'}',
+  'GET',
+  '{escape_sql_string(auth_method)}',
+  '{escape_sql_string(final_api_key)}',
+  '{{}}',
+  '{escape_sql_string(status)}',
+  '{escape_sql_string(validation_message)}',
+  '{created_at}'
+)
+"""
+
+      # Execute the INSERT using the SQL helper
+      result = _execute_sql_query(insert_query, warehouse_id, catalog=None, schema=None, limit=1)
+
+      if not result.get('success'):
+        registration_result = {
+          'success': False,
+          'error': f"Failed to insert into registry: {result.get('error')}",
+        }
+      else:
+        registration_result = {
+          'success': True,
+          'api_id': api_id,
+          'api_name': api_name,
+          'status': status,
+          'user_who_requested': username,
+          'validation_message': validation_message,
+          'message': f'✅ Successfully registered API "{api_name}" with ID: {api_id}',
+        }
 
       # Add discovery insights to the result
       if registration_result.get('success'):
@@ -1157,5 +1234,207 @@ VALUES (
         'next_steps': [
           'Try using register_api_in_registry directly with exact endpoint URL',
           'Use discover_api_endpoint first to validate the endpoint',
+        ],
+      }
+
+  @mcp_server.tool
+  def review_api_documentation_for_endpoints(
+    api_id: str,
+    warehouse_id: str,
+    catalog: str,
+    schema: str,
+    api_key: str = None,
+  ) -> dict:
+    """Review an API's documentation to discover new endpoints.
+
+    This tool fetches the documentation URL stored in the registry for a specific API,
+    parses the documentation, and attempts to discover additional endpoints that could
+    be added to the registry.
+
+    Args:
+        api_id: The ID of the API in the registry to review
+        warehouse_id: SQL warehouse ID to query the registry
+        catalog: Catalog name (required)
+        schema: Schema name (required)
+        api_key: Optional API key to test discovered endpoints
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating if review succeeded
+        - api_info: Information about the API from registry
+        - documentation_url: The documentation URL that was reviewed
+        - documentation_insights: Parsed information from documentation
+        - discovered_endpoints: List of potential endpoints found
+        - tested_endpoints: Results from testing discovered endpoints
+        - next_steps: Recommendations for registering new endpoints
+    """
+    try:
+      if not catalog or not schema:
+        return {
+          'success': False,
+          'error': 'catalog and schema parameters are required',
+        }
+
+      # Step 1: Query the registry to get the API details including documentation_url
+      table_name = f'{catalog}.{schema}.api_registry'
+      query = f"""
+        SELECT api_id, api_name, description, api_endpoint, documentation_url, auth_type, token_info
+        FROM {table_name}
+        WHERE api_id = '{api_id}'
+      """
+
+      print(f'📊 Fetching API details from registry: {api_id}')
+      result = _execute_sql_query(query, warehouse_id, catalog=None, schema=None, limit=1)
+
+      if not result.get('success') or not result.get('data', {}).get('rows'):
+        return {
+          'success': False,
+          'error': f'API with id "{api_id}" not found in registry',
+          'next_steps': ['Verify the api_id is correct', 'Use check_api_registry to list all APIs'],
+        }
+
+      # Get API details
+      api_row = result['data']['rows'][0]
+      api_name = api_row.get('api_name')
+      documentation_url = api_row.get('documentation_url')
+      base_endpoint = api_row.get('api_endpoint')
+
+      if not documentation_url:
+        return {
+          'success': False,
+          'error': f'API "{api_name}" has no documentation_url in the registry',
+          'next_steps': [
+            'Add a documentation_url to this API using update_api endpoint',
+            'Or provide documentation URL when registering new APIs',
+          ],
+        }
+
+      print(f'📚 Reviewing documentation for API: {api_name}')
+      print(f'📄 Documentation URL: {documentation_url}')
+
+      # Step 2: Fetch and parse the documentation
+      doc_result = _fetch_api_documentation(documentation_url)
+
+      if not doc_result.get('success'):
+        return {
+          'success': False,
+          'error': f"Failed to fetch documentation: {doc_result.get('error')}",
+          'documentation_url': documentation_url,
+        }
+
+      # Step 3: Try to discover endpoints from the documentation URLs
+      discovered_endpoints = []
+      tested_endpoints = []
+
+      # Get unique URLs from documentation
+      found_urls = doc_result.get('found_urls', [])[:10]  # Limit to first 10 URLs
+      found_paths = doc_result.get('found_paths', [])[:10]
+
+      print(f'🔍 Found {len(found_urls)} URLs and {len(found_paths)} paths in documentation')
+
+      # Use api_key from registry if not provided
+      if not api_key and api_row.get('token_info'):
+        api_key = api_row.get('token_info')
+        print(f'🔑 Using API key from registry')
+
+      # Try discovered URLs
+      for url in found_urls:
+        discovered_endpoints.append({
+          'type': 'url',
+          'endpoint': url,
+          'source': 'documentation',
+        })
+
+      # Try combining base endpoint with discovered paths
+      if base_endpoint:
+        from urllib.parse import urlparse
+        parsed_base = urlparse(base_endpoint)
+        base_url = f'{parsed_base.scheme}://{parsed_base.netloc}'
+
+        for path in found_paths:
+          full_url = base_url + path
+          discovered_endpoints.append({
+            'type': 'path',
+            'endpoint': full_url,
+            'source': 'documentation + base_url',
+          })
+
+      # Step 4: Test a few discovered endpoints
+      print(f'🧪 Testing discovered endpoints (up to 5)...')
+      endpoints_to_test = discovered_endpoints[:5]
+
+      for endpoint_info in endpoints_to_test:
+        endpoint_url = endpoint_info['endpoint']
+        print(f'  Testing: {endpoint_url}')
+
+        try:
+          # Try calling the endpoint with API key if available
+          headers_json = None
+          if api_key:
+            # Try common API key header patterns
+            headers_json = json.dumps({'Authorization': f'Bearer {api_key}'})
+
+          test_result = call_api_endpoint(endpoint_url, headers=headers_json)
+
+          tested_endpoints.append({
+            'endpoint': endpoint_url,
+            'source': endpoint_info['source'],
+            'status_code': test_result.get('status_code'),
+            'is_healthy': test_result.get('is_healthy', False),
+            'success': test_result.get('success', False),
+            'response_preview': test_result.get('response_preview', '')[:200],
+          })
+
+        except Exception as e:
+          tested_endpoints.append({
+            'endpoint': endpoint_url,
+            'source': endpoint_info['source'],
+            'error': str(e),
+            'success': False,
+          })
+
+      # Build response with insights
+      working_endpoints = [ep for ep in tested_endpoints if ep.get('is_healthy')]
+
+      return {
+        'success': True,
+        'api_info': {
+          'api_id': api_id,
+          'api_name': api_name,
+          'base_endpoint': base_endpoint,
+        },
+        'documentation_url': documentation_url,
+        'documentation_insights': {
+          'urls_found': len(found_urls),
+          'paths_found': len(found_paths),
+          'parameters_found': doc_result.get('found_params', []),
+          'content_length': doc_result.get('content_length'),
+        },
+        'discovered_endpoints': discovered_endpoints[:20],  # Return up to 20 discovered
+        'discovered_count': len(discovered_endpoints),
+        'tested_endpoints': tested_endpoints,
+        'working_endpoints': working_endpoints,
+        'working_count': len(working_endpoints),
+        'next_steps': [
+          f'✅ Found {len(discovered_endpoints)} potential endpoints in documentation',
+          f'✅ Tested {len(tested_endpoints)} endpoints, {len(working_endpoints)} are working',
+          'Consider registering working endpoints using register_api_in_registry',
+          'Test additional discovered endpoints using call_api_endpoint',
+        ] if working_endpoints else [
+          f'Found {len(discovered_endpoints)} potential endpoints in documentation',
+          'Most endpoints require additional configuration or authentication',
+          'Review the documentation_insights for parameter requirements',
+          'Try testing endpoints manually with call_api_endpoint',
+        ],
+      }
+
+    except Exception as e:
+      print(f'❌ Error reviewing API documentation: {str(e)}')
+      return {
+        'success': False,
+        'error': f'Review error: {str(e)}',
+        'next_steps': [
+          'Verify the api_id exists in the registry',
+          'Check if the documentation_url is accessible',
         ],
       }

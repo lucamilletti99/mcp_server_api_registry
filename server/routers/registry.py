@@ -17,6 +17,7 @@ class RegisteredAPI(BaseModel):
     api_name: str
     description: Optional[str] = None
     api_endpoint: str
+    documentation_url: Optional[str] = None
     http_method: str = 'GET'
     auth_type: str = 'none'
     status: str = 'pending'
@@ -35,6 +36,10 @@ class APIRegistryResponse(BaseModel):
 def get_workspace_client(request: Request = None) -> WorkspaceClient:
     """Get authenticated Databricks workspace client.
 
+    Falls back to OAuth service principal authentication if:
+    - User token is not available
+    - User has no access to warehouses AND catalogs
+
     Args:
         request: FastAPI Request object to extract user token from
 
@@ -49,12 +54,31 @@ def get_workspace_client(request: Request = None) -> WorkspaceClient:
         user_token = request.headers.get('x-forwarded-access-token')
 
     if user_token:
-        # Use on-behalf-of authentication with user's token
-        print(f"🔐 Using OBO authentication for user")
+        # Try on-behalf-of authentication with user's token
+        print(f"🔐 Attempting OBO authentication for user")
         config = Config(host=host, token=user_token, auth_type='pat')
-        return WorkspaceClient(config=config)
+        user_client = WorkspaceClient(config=config)
+
+        # Verify user has access to SQL warehouses
+        has_warehouse_access = False
+
+        try:
+            warehouses = list(user_client.warehouses.list())
+            if warehouses:
+                has_warehouse_access = True
+                print(f"✅ User has access to {len(warehouses)} warehouse(s)")
+        except Exception as e:
+            print(f"⚠️  User cannot list warehouses: {str(e)}")
+
+        # If user has warehouse access, use OBO; otherwise fallback to service principal
+        if has_warehouse_access:
+            print(f"✅ Using OBO authentication - user has warehouse access")
+            return user_client
+        else:
+            print(f"⚠️  User has no warehouse access, falling back to service principal")
+            return WorkspaceClient(host=host)
     else:
-        # Fall back to OAuth service principal authentication
+        # No user token - fall back to OAuth service principal authentication
         print(f"⚠️  No user token found, falling back to service principal")
         return WorkspaceClient(host=host)
 
@@ -101,6 +125,7 @@ async def list_apis(
             api_name,
             description,
             api_endpoint,
+            documentation_url,
             http_method,
             auth_type,
             status,
@@ -186,7 +211,8 @@ async def update_api(
     api_name: str,
     description: str,
     api_endpoint: str,
-    request: Request
+    request: Request,
+    documentation_url: str = None
 ):
     """Update an existing API in the registry.
 
@@ -199,6 +225,7 @@ async def update_api(
         description: New description
         api_endpoint: New endpoint URL
         request: Request object for authentication
+        documentation_url: Optional documentation URL
 
     Returns:
         Success message
@@ -209,16 +236,28 @@ async def update_api(
         # Build fully-qualified table name
         table_name = f'{catalog}.{schema}.api_registry'
 
-        # Update query
-        query = f"""
-        UPDATE {table_name}
-        SET
-            api_name = '{api_name}',
-            description = '{description}',
-            api_endpoint = '{api_endpoint}',
-            modified_date = CURRENT_TIMESTAMP()
-        WHERE api_id = '{api_id}'
-        """
+        # Update query - include documentation_url if provided
+        if documentation_url:
+            query = f"""
+            UPDATE {table_name}
+            SET
+                api_name = '{api_name}',
+                description = '{description}',
+                api_endpoint = '{api_endpoint}',
+                documentation_url = '{documentation_url}',
+                modified_date = CURRENT_TIMESTAMP()
+            WHERE api_id = '{api_id}'
+            """
+        else:
+            query = f"""
+            UPDATE {table_name}
+            SET
+                api_name = '{api_name}',
+                description = '{description}',
+                api_endpoint = '{api_endpoint}',
+                modified_date = CURRENT_TIMESTAMP()
+            WHERE api_id = '{api_id}'
+            """
 
         # Execute update
         statement = ws.statement_execution.execute_statement(

@@ -16,6 +16,7 @@ interface RegisteredAPI {
   api_name: string;
   description: string;
   api_endpoint: string;
+  documentation_url?: string;
   http_method: string;
   auth_type: string;
   status: string;
@@ -116,6 +117,11 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
         description: editForm.description || '',
         api_endpoint: editForm.api_endpoint || '',
       });
+
+      // Add documentation_url if provided
+      if (editForm.documentation_url) {
+        params.append('documentation_url', editForm.documentation_url);
+      }
 
       const response = await fetch(`/api/registry/update/${editingId}?${params.toString()}`, {
         method: 'POST',
@@ -356,6 +362,17 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
                             className={isDark ? 'bg-white/5 border-white/20 text-white' : ''}
                           />
                         </div>
+                        <div>
+                          <label className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            Documentation URL
+                          </label>
+                          <Input
+                            value={editForm.documentation_url || ''}
+                            onChange={(e) => setEditForm({ ...editForm, documentation_url: e.target.value })}
+                            className={isDark ? 'bg-white/5 border-white/20 text-white' : ''}
+                            placeholder="https://api.example.com/docs"
+                          />
+                        </div>
                       </div>
                       <div className="flex gap-2 mt-4">
                         <Button
@@ -406,6 +423,20 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
                               <ExternalLink className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-60 group-hover:opacity-100" />
                             </a>
                           </div>
+                          {api.documentation_url && (
+                            <div>
+                              <span className="font-medium">Documentation:</span>
+                              <a
+                                href={api.documentation_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-start gap-1 hover:underline mt-1 group"
+                              >
+                                <span className="break-all">{api.documentation_url}</span>
+                                <ExternalLink className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-60 group-hover:opacity-100" />
+                              </a>
+                            </div>
+                          )}
                           <div>
                             <span className="font-medium">Method:</span> {api.http_method}
                           </div>

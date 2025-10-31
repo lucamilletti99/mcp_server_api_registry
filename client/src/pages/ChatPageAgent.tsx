@@ -26,6 +26,8 @@ import {
   Check,
   Edit2,
   AlertCircle,
+  User,
+  Bot,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import DOMPurify from "dompurify";
@@ -709,7 +711,11 @@ export function ChatPageAgent({
                   onClick={sendMessage}
                   disabled={loading || !input.trim()}
                   size="lg"
-                  className="absolute bottom-4 right-4 rounded-full bg-[#FF3621] hover:bg-[#E02E1A] text-white shadow-lg"
+                  className={`absolute bottom-4 right-4 rounded-full text-white shadow-lg ${
+                    isDark
+                      ? "bg-[#2C555C] hover:bg-[#24494F]"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
                 >
                   {loading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -745,12 +751,23 @@ export function ChatPageAgent({
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
+                {/* Icon - shown on left for assistant, right for user */}
+                {message.role === "assistant" && (
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    isDark ? "bg-white/10 text-white" : "bg-gray-200 text-gray-700"
+                  }`}>
+                    <Bot className="h-5 w-5" />
+                  </div>
+                )}
+
                 <div
                   className={`max-w-[80%] rounded-2xl px-6 py-4 shadow-lg relative group ${
                     message.role === "user"
-                      ? "bg-[#FF3621] text-white"
+                      ? isDark
+                        ? "bg-[#2C555C] text-white border border-white/10"
+                        : "bg-[#E3F2FD] text-gray-900 border border-blue-200"
                       : isDark
                       ? "bg-white/10 backdrop-blur-md text-white border border-white/20"
                       : "bg-white text-gray-900 border border-gray-200"
@@ -778,7 +795,11 @@ export function ChatPageAgent({
                     {message.role === "user" && editingIndex !== index && (
                       <button
                         onClick={() => handleEditMessage(index, message.content)}
-                        className="p-1.5 rounded-lg transition-all hover:bg-white/20 text-white/80 hover:text-white"
+                        className={`p-1.5 rounded-lg transition-all ${
+                          isDark
+                            ? "hover:bg-white/10 text-white/60 hover:text-white"
+                            : "hover:bg-black/5 text-gray-500 hover:text-gray-900"
+                        }`}
                         title="Edit and resend"
                       >
                         <Edit2 className="h-4 w-4" />
@@ -811,7 +832,11 @@ export function ChatPageAgent({
                         <Button
                           size="sm"
                           onClick={() => handleSaveEdit(index)}
-                          className="bg-[#FF3621] hover:bg-[#E02E1A] text-white"
+                          className={
+                            isDark
+                              ? "bg-[#2C555C] hover:bg-[#24494F] text-white"
+                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                          }
                         >
                           Send
                         </Button>
@@ -868,6 +893,15 @@ export function ChatPageAgent({
                     </>
                   )}
                 </div>
+
+                {/* User Icon - shown on right for user messages */}
+                {message.role === "user" && (
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                    isDark ? "bg-[#2C555C] text-white border border-white/10" : "bg-[#E3F2FD] text-gray-700 border border-blue-200"
+                  }`}>
+                    <User className="h-5 w-5" />
+                  </div>
+                )}
               </div>
             ))}
             {loading && (
@@ -976,7 +1010,11 @@ export function ChatPageAgent({
             <Button
               size="sm"
               onClick={handleSaveSystemPrompt}
-              className="bg-[#FF3621] hover:bg-[#E02E1A] text-white"
+              className={
+                isDark
+                  ? "bg-[#2C555C] hover:bg-[#24494F] text-white"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              }
             >
               Save
             </Button>
@@ -1031,7 +1069,11 @@ export function ChatPageAgent({
                 onClick={sendMessage}
                 disabled={loading || !input.trim()}
                 size="icon"
-                className="absolute bottom-3 right-3 rounded-full bg-[#FF3621] hover:bg-[#E02E1A] text-white shadow-lg"
+                className={`absolute bottom-3 right-3 rounded-full text-white shadow-lg ${
+                  isDark
+                    ? "bg-[#2C555C] hover:bg-[#24494F]"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />

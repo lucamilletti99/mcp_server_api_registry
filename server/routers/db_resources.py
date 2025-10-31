@@ -14,7 +14,9 @@ router = APIRouter()
 def get_workspace_client(request: Request) -> WorkspaceClient:
     """Get a WorkspaceClient with on-behalf-of user authentication.
 
-    Falls back to OAuth service principal authentication if user token is not available.
+    Falls back to OAuth service principal authentication if:
+    - User token is not available
+    - User has no access to warehouses AND catalogs
 
     Args:
         request: FastAPI Request object to extract user token from
@@ -28,12 +30,31 @@ def get_workspace_client(request: Request) -> WorkspaceClient:
     user_token = request.headers.get('x-forwarded-access-token')
 
     if user_token:
-        # Use on-behalf-of authentication with user's token
-        print(f"🔐 Using OBO authentication for user")
+        # Try on-behalf-of authentication with user's token
+        print(f"🔐 Attempting OBO authentication for user")
         config = Config(host=host, token=user_token, auth_type='pat')
-        return WorkspaceClient(config=config)
+        user_client = WorkspaceClient(config=config)
+
+        # Verify user has access to SQL warehouses
+        has_warehouse_access = False
+
+        try:
+            warehouses = list(user_client.warehouses.list())
+            if warehouses:
+                has_warehouse_access = True
+                print(f"✅ User has access to {len(warehouses)} warehouse(s)")
+        except Exception as e:
+            print(f"⚠️  User cannot list warehouses: {str(e)}")
+
+        # If user has warehouse access, use OBO; otherwise fallback to service principal
+        if has_warehouse_access:
+            print(f"✅ Using OBO authentication - user has warehouse access")
+            return user_client
+        else:
+            print(f"⚠️  User has no warehouse access, falling back to service principal")
+            return WorkspaceClient(host=host)
     else:
-        # Fall back to OAuth service principal authentication
+        # No user token - fall back to OAuth service principal authentication
         print(f"⚠️  No user token found, falling back to service principal")
         return WorkspaceClient(host=host)
 

@@ -1,374 +1,280 @@
-# 🤖 Databricks MCP Server Template
+# 🔌 API Registry MCP Server
 
-Host Model Context Protocol (MCP) prompts and tools on Databricks Apps, enabling AI assistants like Claude to interact with your Databricks workspace through a secure, authenticated interface.
+A Databricks app that helps you discover, register, and manage external API endpoints with an AI-powered chat interface and MCP server.
 
 ## What is this?
 
-This template lets you create an MCP server that runs on Databricks Apps. You can:
-- 📝 **Add prompts** as simple markdown files in the `prompts/` folder
-- 🛠️ **Create tools** as Python functions that leverage Databricks SDK
-- 🔐 **Authenticate securely** with OAuth through Databricks Apps
-- 🚀 **Deploy instantly** to make your MCP server accessible to Claude
+This is a complete API discovery and management platform that runs on Databricks Apps. It combines:
 
-Think of it as a bridge between Claude and your Databricks workspace - you define what Claude can see and do, and this server handles the rest.
-
-## How it Works
-
-### Architecture Overview
-
-```
-┌─────────────┐       MCP Protocol      ┌──────────────────┐        OAuth         ┌─────────────────┐
-│   Claude    │ ◄─────────────────────► │  dba-mcp-proxy   │ ◄──────────────────► │ Databricks App  │
-│    CLI      │     (stdio/JSON-RPC)    │ (local process)  │    (HTTPS/SSE)      │  (MCP Server)   │
-└─────────────┘                         └──────────────────┘                      └─────────────────┘
-                                                ▲                                           │
-                                                │                                           ▼
-                                                └────────── Databricks OAuth ──────► Workspace APIs
-```
-
-### Components
-
-1. **MCP Server** (`server/app.py`): A FastAPI app with integrated MCP server that:
-   - Dynamically loads prompts from `prompts/*.md` files
-   - Exposes Python functions as MCP tools via `@mcp_server.tool` decorator
-   - Handles both HTTP requests and MCP protocol over Server-Sent Events
-
-2. **Prompts** (`prompts/`): Simple markdown files where:
-   - Filename = prompt name (e.g., `check_system.md` → `check_system` prompt)
-   - First line with `#` = description
-   - File content = what gets returned to Claude
-
-3. **Local Proxy** (`dba_mcp_proxy/`): Authenticates and proxies MCP requests:
-   - Handles Databricks OAuth authentication automatically
-   - Translates between Claude's stdio protocol and HTTP/SSE
-   - Works with both local development and deployed apps
-
-## 🎬 Demo
-
-This 10-minute video shows you how to set up and use a Databricks MCP server with Claude: https://www.youtube.com/watch?v=oKE59zgb6e0
-
-[![Databricks MCP Demo](https://github.com/user-attachments/assets/315a0e35-73c0-47f7-9ce5-dfada3149101)](https://www.youtube.com/watch?v=oKE59zgb6e0)
-
-This video demonstrates creating your own MCP server with a custom jobs interface in Claude.
+- **🤖 AI Chat Interface**: Natural language API registration powered by Claude
+- **📊 API Registry**: Database-backed catalog of external API endpoints
+- **🔍 Smart Discovery**: Automatic endpoint testing and validation
+- **📚 Documentation Parser**: Extract endpoints from API documentation URLs
+- **🛠️ MCP Server**: Expose API management tools to Claude CLI
 
 ## Quick Start
 
-### Create Your Own MCP Server
+### Prerequisites
 
-#### Step 1: Use this template
+- Databricks workspace with Apps enabled
+- Python 3.12+ with `uv` package manager
+- Databricks CLI (`databricks`) v0.260.0+
+- (Optional) Claude CLI for MCP integration
 
-[![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?style=for-the-badge)](https://github.com/databricks-solutions/custom-mcp-databricks-app/generate)
-
-Or use the GitHub CLI:
-```bash
-gh repo create my-mcp-server --template databricks-solutions/custom-mcp-databricks-app --private
-```
-
-#### Step 2: Clone and setup
+### 1. Clone and Setup
 
 ```bash
-# Clone your new repository
-git clone https://github.com/YOUR-USERNAME/my-mcp-server.git
-cd my-mcp-server
+git clone https://github.com/YOUR-USERNAME/mcp_server_api_registry.git
+cd mcp_server_api_registry
 
-# Run the interactive setup
+# Run interactive setup
 ./setup.sh
 ```
 
 This will:
+- Install `uv` if not present
 - Configure Databricks authentication
-- Set your MCP server name
 - Install all dependencies
-- Create your `.env.local` file
+- Create `.env.local` configuration
 
-#### Step 3: Deploy with Claude
+### 2. Create the API Registry Table
 
-In Claude Code, run:
+The app needs a table to store registered APIs. Run this SQL in your Databricks workspace:
+
+```sql
+CREATE TABLE IF NOT EXISTS your_catalog.your_schema.api_registry (
+  api_id STRING NOT NULL,
+  api_name STRING NOT NULL,
+  description STRING,
+  api_endpoint STRING NOT NULL,
+  documentation_url STRING,
+  http_method STRING DEFAULT 'GET',
+  auth_type STRING DEFAULT 'none',
+  token_info STRING,
+  request_params STRING DEFAULT '{}',
+  status STRING DEFAULT 'pending',
+  validation_message STRING,
+  user_who_requested STRING,
+  created_at TIMESTAMP,
+  modified_date TIMESTAMP,
+  PRIMARY KEY (api_id)
+);
 ```
-/setup-mcp
+
+Or use the provided script:
+```bash
+uv run python setup_table.py your_catalog your_schema
 ```
 
-This will:
-- Deploy your MCP server to Databricks Apps
-- Configure the MCP integration
-- Show you available prompts and tools
-
-Then restart Claude Code to use your new MCP server.
-
-### Add to Claude CLI
-
-After deployment, add your MCP server to Claude:
+### 3. Deploy to Databricks
 
 ```bash
-# Set your Databricks configuration
-export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
-export DATABRICKS_APP_URL="https://your-app.databricksapps.com"  # Get this from ./app_status.sh
-export SERVER_NAME="your-server-name"  # This comes from config.yaml (set during ./setup.sh)
+./deploy.sh
+```
 
-# Add your MCP server to Claude (user-scoped)
-claude mcp add $SERVER_NAME --scope user -- \
-  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/your-repo.git dba-mcp-proxy \
+Your app will be available at: `https://your-app.databricksapps.com`
+
+### 4. (Optional) Add MCP Server to Claude CLI
+
+```bash
+# Get your app URL
+export DATABRICKS_APP_URL=$(./app_status.sh | grep "App URL" | awk '{print $NF}')
+export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
+
+# Add to Claude
+claude mcp add api-registry --scope user -- \
+  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/mcp_server_api_registry.git dba-mcp-proxy \
   --databricks-host $DATABRICKS_HOST \
   --databricks-app-url $DATABRICKS_APP_URL
 ```
+
+## Features
+
+### Web UI
+
+Access the web interface at your app URL:
+
+1. **Chat Playground**: AI-powered API registration
+   - Natural language: "Register the Alpha Vantage stock API"
+   - Automatic endpoint discovery and testing
+   - Documentation URL parsing
+   - Smart pattern matching
+
+2. **API Registry**: View and manage registered APIs
+   - Edit API details and documentation URLs
+   - Test API health
+   - Delete APIs
+   - Filter and search
+
+3. **MCP Info**: View available MCP tools and prompts
+   - See all exposed tools
+   - Copy setup instructions
+   - View architecture diagram
+
+4. **Traces**: Debug AI agent execution
+   - View tool calls and responses
+   - Inspect trace details
+   - Monitor performance
+
+### MCP Tools
+
+When added to Claude CLI, the following tools are available:
+
+- `smart_register_api`: One-step API registration with automatic discovery
+- `register_api_in_registry`: Manual API registration
+- `check_api_registry`: List all registered APIs
+- `review_api_documentation_for_endpoints`: Discover new endpoints from documentation
+- `call_api_endpoint`: Test API endpoints with custom headers
+- `execute_dbsql`: Run SQL queries against Databricks
+- `discover_api_endpoint`: Validate and test API endpoints
+- `fetch_api_documentation`: Parse API documentation from URLs
+- `list_warehouses`: List available SQL warehouses
+
+## Configuration
+
+### Environment Variables (`.env.local`)
+
+```bash
+DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
+DATABRICKS_TOKEN=your-personal-access-token  # For local development
+DATABRICKS_SQL_WAREHOUSE_ID=your-warehouse-id  # Optional default warehouse
+```
+
+### App Configuration (`config.yaml`)
+
+```yaml
+name: mcp-server-api-registry
+display_name: API Registry MCP Server
+description: AI-powered API discovery and management platform
+```
+
+## Development
 
 ### Local Development
 
 ```bash
-# Clone and setup
-git clone <your-repo>
-cd <your-repo>
-./setup.sh
-
-# Start dev server
+# Start dev server (frontend + backend with hot reload)
 ./watch.sh
 
-# Set your configuration for local testing
-export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
-export DATABRICKS_APP_URL="http://localhost:8000"  # Local dev server
-
-# Add to Claude for local testing
-claude mcp add databricks-mcp-local --scope local -- \
-  uvx --refresh --from git+ssh://git@github.com/YOUR-ORG/YOUR-REPO.git dba-mcp-proxy \
-  --databricks-host $DATABRICKS_HOST \
-  --databricks-app-url $DATABRICKS_APP_URL
+# Access at:
+# - Frontend: http://localhost:5173
+# - Backend: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
 ```
 
-## Customization Guide
-
-This template uses [FastMCP](https://github.com/jlowin/fastmcp), a framework that makes it easy to build MCP servers. FastMCP provides two main decorators for extending functionality:
-
-- **`@mcp_server.prompt`** - For registering prompts that return text
-- **`@mcp_server.tool`** - For registering tools that execute functions
-
-### Adding Prompts
-
-The easiest way is to create a markdown file in the `prompts/` directory:
-
-```markdown
-# Get cluster information
-
-List all available clusters in the workspace with their current status
-```
-
-The prompt will be automatically loaded with:
-- **Name**: filename without extension (e.g., `get_clusters.md` → `get_clusters`)
-- **Description**: first line after `#` 
-- **Content**: entire file content
-
-Alternatively, you can register prompts as functions in `server/app.py`:
-
-```python
-@mcp_server.prompt(name="dynamic_status", description="Get dynamic system status")
-async def get_dynamic_status():
-    # This can include dynamic logic, API calls, etc.
-    w = get_workspace_client()
-    current_user = w.current_user.me()
-    return f"Current user: {current_user.display_name}\nWorkspace: {DATABRICKS_HOST}"
-```
-
-We auto-load `prompts/` for convenience, but function-based prompts are useful when you need dynamic content.
-
-### Adding Tools
-
-Add a function in `server/app.py` using the `@mcp_server.tool` decorator:
-
-```python
-@mcp_server.tool
-def list_clusters(status: str = "RUNNING") -> dict:
-    """List Databricks clusters by status."""
-    w = get_workspace_client()
-    clusters = []
-    for cluster in w.clusters.list():
-        if cluster.state.name == status:
-            clusters.append({
-                "id": cluster.cluster_id,
-                "name": cluster.cluster_name,
-                "state": cluster.state.name
-            })
-    return {"clusters": clusters}
-```
-
-Tools must:
-- Use the `@mcp_server.tool` decorator
-- Have a docstring (becomes the tool description)
-- Return JSON-serializable data (dict, list, str, etc.)
-- Accept only JSON-serializable parameters
-
-
-## Deployment
+### Code Formatting
 
 ```bash
-# Deploy to Databricks Apps
-./deploy.sh
+./fix.sh  # Format Python (ruff) and TypeScript (prettier)
+```
 
-# Check status and get your app URL
+### Debugging
+
+```bash
+# Check app status
 ./app_status.sh
-```
 
-Your MCP server will be available at `https://your-app.databricksapps.com/mcp/`
+# Stream app logs
+uv run python dba_logz.py https://your-app.databricksapps.com --duration 60
 
-The `app_status.sh` script will show your deployed app URL, which you'll need for the `DATABRICKS_APP_URL` environment variable when adding the MCP server to Claude.
-
-## Authentication
-
-- **Local Development**: No authentication required
-- **Production**: OAuth is handled automatically by the proxy using your Databricks CLI credentials
-
-## Examples
-
-### Using with Claude
-
-Once added, you can interact with your MCP server in Claude:
-
-```
-Human: What prompts are available?
-
-Claude: I can see the following prompts from your Databricks MCP server:
-- check_system: Get system information
-- list_files: List files in the current directory
-- ping_google: Check network connectivity
-```
-
-### Sample Tool Usage
-
-```
-Human: Can you execute a SQL query to show databases?
-
-Claude: I'll execute that SQL query for you using the execute_dbsql tool.
-
-[Executes SQL and returns results]
+# Test API endpoints
+uv run python dba_client.py https://your-app.databricksapps.com /api/user/me
 ```
 
 ## Project Structure
 
 ```
-├── server/                    # FastAPI backend with MCP server
-│   ├── app.py                # Main application + MCP tools
-│   └── routers/              # API endpoints
-├── prompts/                  # MCP prompts (markdown files)
-│   ├── check_system.md      
-│   ├── list_files.md        
-│   └── ping_google.md       
-├── dba_mcp_proxy/           # MCP proxy for Claude CLI
-│   └── mcp_client.py        # OAuth + proxy implementation
-├── client/                  # React frontend (optional)
-├── scripts/                 # Development tools
-└── pyproject.toml          # Python package configuration
+├── server/                     # FastAPI backend
+│   ├── app.py                 # Main application + MCP server
+│   ├── tools.py               # MCP tools implementation
+│   └── routers/               # API endpoints
+│       ├── agent_chat.py      # AI chat endpoint
+│       ├── registry.py        # API registry CRUD
+│       └── db_resources.py    # Databricks resources
+├── client/                    # React TypeScript frontend
+│   └── src/
+│       ├── pages/             # Page components
+│       └── components/        # Reusable UI components
+├── prompts/                   # MCP prompts (markdown)
+├── dba_mcp_proxy/            # MCP proxy for Claude CLI
+├── setup_table.py            # Database table setup script
+├── setup_api_registry_table.sql  # Table schema
+├── deploy.sh                 # Deploy to Databricks Apps
+├── watch.sh                  # Local development server
+└── pyproject.toml           # Python dependencies
 ```
 
-## Advanced Usage
+## Authentication
 
-### Environment Variables
+The app uses **On-Behalf-Of (OBO) authentication**:
+- User's OAuth token is forwarded from Databricks Apps
+- Falls back to service principal if user has no SQL warehouse access
+- All operations run with proper user context
 
-Configure in `.env.local`:
-```bash
-DATABRICKS_HOST=https://your-workspace.cloud.databricks.com
-DATABRICKS_TOKEN=your-token  # For local development
-DATABRICKS_SQL_WAREHOUSE_ID=your-warehouse-id  # For SQL tools
+## Usage Examples
+
+### Registering an API via Chat
+
+```
+User: Register the Alpha Vantage stock API, here's the docs: https://www.alphavantage.co/documentation/
+
+AI: I'll register the Alpha Vantage API for you.
+[Fetches documentation, discovers endpoints, tests them, registers the best one]
+
+✅ Successfully registered "alphavantage_stock" with validation: HTTP 200 OK
 ```
 
-### Creating Complex Tools
+### Discovering New Endpoints
 
-Tools can access the full Databricks SDK:
+```
+User: Can you check the SEC API documentation and find more endpoints?
 
-```python
-@mcp_server.tool
-def create_job(name: str, notebook_path: str, cluster_id: str) -> dict:
-    """Create a Databricks job."""
-    w = get_workspace_client()
-    job = w.jobs.create(
-        name=name,
-        tasks=[{
-            "task_key": "main",
-            "notebook_task": {"notebook_path": notebook_path},
-            "existing_cluster_id": cluster_id
-        }]
-    )
-    return {"job_id": job.job_id, "run_now_url": f"{DATABRICKS_HOST}/#job/{job.job_id}"}
+AI: Let me review the SEC API documentation for new endpoints.
+[Fetches stored documentation URL, parses it, tests discovered endpoints]
+
+Found 5 working endpoints:
+1. /search/filings
+2. /company/{CIK}
+3. /facts/{CIK}
+...
 ```
 
-## Testing Your MCP Server
+### Querying the Registry
 
-This template includes comprehensive testing tools for validating MCP functionality at multiple levels.
-
-### Quick Verification
-
-After adding the MCP server to Claude, verify it's working:
-
-```bash
-# List available prompts and tools
-echo "What MCP prompts are available from databricks-mcp?" | claude
-
-# Test a specific prompt
-echo "Use the check_system prompt from databricks-mcp" | claude
 ```
+User: Show me all registered APIs
 
-### Comprehensive Testing Suite
-
-The `claude_scripts/` directory contains 6 testing tools for thorough MCP validation:
-
-#### Command Line Tests
-```bash
-# Test local MCP server (requires ./watch.sh to be running)
-./claude_scripts/test_local_mcp_curl.sh      # Direct HTTP/curl tests with session handling
-./claude_scripts/test_local_mcp_proxy.sh     # MCP proxy client tests
-
-# Test remote MCP server (requires Databricks auth and deployment)
-./claude_scripts/test_remote_mcp_curl.sh     # OAuth + HTTP tests with dynamic URL discovery
-./claude_scripts/test_remote_mcp_proxy.sh    # Full end-to-end MCP proxy tests
+AI: Here are your registered APIs:
+- alphavantage_stock: Alpha Vantage stock market data
+- fred_series_api: Federal Reserve Economic Data
+- sec_api: SEC filings and company data
+...
 ```
-
-#### Interactive Web UI Tests
-```bash
-# Launch MCP Inspector for visual testing (requires ./watch.sh for local)
-./claude_scripts/inspect_local_mcp.sh        # Local server web interface
-./claude_scripts/inspect_remote_mcp.sh       # Remote server web interface
-```
-
-**MCP Inspector Features:**
-- 🖥️ Web-based interface for interactive MCP server testing
-- 🔧 Visual tool execution with parameter input forms  
-- 📊 Real-time request/response monitoring
-- 🐛 Protocol-level debugging and error inspection
-- 📋 Complete tool and resource discovery
-
-#### What Each Test Validates
-
-| Test Type | Authentication | Protocol | Session Management | Tool Discovery |
-|-----------|---------------|----------|-------------------|----------------|
-| **curl tests** | ✅ | ✅ | ✅ | ✅ |
-| **proxy tests** | ✅ | ✅ | ✅ | ✅ |
-| **MCP Inspector** | ✅ | ✅ | ✅ | ✅ |
-
-All tests dynamically discover app URLs and handle OAuth authentication automatically.
-
-See [`claude_scripts/README.md`](claude_scripts/README.md) for detailed documentation.
 
 ## Troubleshooting
 
-- **Authentication errors**: Run `databricks auth login` to refresh credentials
-- **MCP not found**: Ensure the app is deployed and accessible
-- **Tool errors**: Check logs at `https://your-app.databricksapps.com/logz`
-- **MCP connection issues**: 
-  - Check Claude logs: `tail -f ~/Library/Logs/Claude/*.log`
-  - Verify the proxy works: `uvx --refresh --from git+ssh://... dba-mcp-proxy --help`
-  - Test with echo pipe: `echo "list your mcp commands" | claude`
-- **Cached version issues**: If you get errors about missing arguments after an update:
-  ```bash
-  # Clear uvx cache for this package
-  rm -rf ~/.cache/uv/git-v0/checkouts/*/
-  # Or clear entire uv cache
-  uv cache clean
-  ```
+**Table not found error:**
+- Create the `api_registry` table in your selected catalog.schema
+- Or use a different catalog.schema that has the table
 
-## Contributing
+**Authentication failures:**
+- Ensure Databricks CLI is authenticated: `databricks current-user me`
+- Check `.env.local` has correct `DATABRICKS_HOST`
 
-1. Fork the repository
-2. Add your prompts and tools
-3. Test locally with `./watch.sh`
-4. Submit a pull request
+**MCP server not responding:**
+- Verify app is deployed: `./app_status.sh`
+- Check Claude logs: `tail -f ~/Library/Logs/Claude/*.log`
+- Test proxy: `uvx --from git+ssh://... dba-mcp-proxy --help`
+
+**Smart registration failing:**
+- Check app logs: `uv run python dba_logz.py YOUR_APP_URL --search "ERROR"`
+- Verify warehouse has access to required catalogs
+- Try manual registration with `register_api_in_registry`
 
 ## License
 
 See [LICENSE.md](LICENSE.md)
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for reporting security vulnerabilities.

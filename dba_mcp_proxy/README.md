@@ -1,48 +1,71 @@
-# DBA MCP Proxy
+# API Registry MCP Proxy
 
-A Model Context Protocol (MCP) proxy client for Databricks Apps.
+MCP proxy client for the API Registry Databricks App. This proxy enables Claude CLI to interact with the API Registry MCP server running on Databricks Apps.
 
 ## Usage
 
-Run the proxy directly from GitHub using uvx:
+### Adding to Claude CLI
 
 ```bash
-uvx --refresh --from git+ssh://git@github.com/databricks-solutions/custom-mcp-databricks-app.git \
-  dba-mcp-proxy \
-  --databricks-host <HOST> \
-  --databricks-app-url <URL>
+# Set your configuration
+export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
+export DATABRICKS_APP_URL="https://your-app.databricksapps.com"  # From ./app_status.sh
+
+# Add to Claude (user-scoped)
+claude mcp add api-registry --scope user -- \
+  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/mcp_server_api_registry.git dba-mcp-proxy \
+  --databricks-host $DATABRICKS_HOST \
+  --databricks-app-url $DATABRICKS_APP_URL
 ```
 
-### Arguments
+### Local Development
 
-- **--databricks-host**: Your Databricks workspace URL (e.g., `https://workspace.cloud.databricks.com`)
-- **--databricks-app-url**: The Databricks App URL (e.g., `https://myapp.databricksapps.com`)
-
-### Examples
+For testing against your local development server:
 
 ```bash
-# Connect to local development server
-uvx --refresh --from git+ssh://git@github.com/databricks-solutions/custom-mcp-databricks-app.git \
-  dba-mcp-proxy \
-  --databricks-host https://workspace.cloud.databricks.com \
-  --databricks-app-url http://localhost:8000
+# Start local dev server first
+./watch.sh
 
-# Connect to deployed Databricks App
-uvx --refresh --from git+ssh://git@github.com/databricks-solutions/custom-mcp-databricks-app.git \
-  dba-mcp-proxy \
-  --databricks-host https://workspace.cloud.databricks.com \
-  --databricks-app-url https://myapp.databricksapps.com
+# Add local MCP server to Claude
+export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
+export DATABRICKS_APP_URL="http://localhost:8000"
+
+claude mcp add api-registry-local --scope local -- \
+  uvx --refresh --from git+ssh://git@github.com/YOUR-USERNAME/mcp_server_api_registry.git dba-mcp-proxy \
+  --databricks-host $DATABRICKS_HOST \
+  --databricks-app-url $DATABRICKS_APP_URL
 ```
 
-## What it does
+## What It Does
 
-The DBA MCP Proxy:
-- Connects to a Databricks App's MCP server endpoint
-- Handles authentication (OAuth for deployed apps)
-- Provides a standard MCP interface for tools like Claude
-- Enables interaction with Databricks workspace resources through MCP
+The proxy:
+- Connects to the API Registry MCP server at `/mcp/` endpoint
+- Handles Databricks OAuth authentication automatically
+- Translates between Claude's stdio protocol and HTTP/SSE
+- Provides access to all API Registry tools
+
+## Available Tools
+
+Once added, Claude can use these tools:
+
+- `smart_register_api` - One-step API registration with discovery
+- `register_api_in_registry` - Manual API registration
+- `check_api_registry` - List registered APIs
+- `review_api_documentation_for_endpoints` - Discover new endpoints from docs
+- `call_api_endpoint` - Test API endpoints
+- `execute_dbsql` - Run SQL queries
+- `discover_api_endpoint` - Validate endpoints
+- `fetch_api_documentation` - Parse API docs
+- `list_warehouses` - List SQL warehouses
 
 ## Authentication
 
-- **Local development**: No authentication required
-- **Deployed apps**: Uses Databricks OAuth via CLI authentication
+- **Local**: No authentication required (`http://localhost:8000`)
+- **Deployed**: OAuth via Databricks CLI (`databricks auth login`)
+
+## Testing Connection
+
+```bash
+# Verify it works
+echo "What MCP tools are available from api-registry?" | claude
+```
