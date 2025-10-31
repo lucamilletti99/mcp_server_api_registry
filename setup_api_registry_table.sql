@@ -10,13 +10,13 @@ CREATE TABLE IF NOT EXISTS {catalog}.{schema}.api_registry (
   description STRING,
   api_endpoint STRING NOT NULL,
   documentation_url STRING,
-  http_method STRING DEFAULT 'GET',
-  auth_type STRING DEFAULT 'none',
+  http_method STRING,
+  auth_type STRING,
   token_info STRING,
-  request_params STRING DEFAULT '{}',
+  request_params STRING,
 
   -- Status tracking
-  status STRING DEFAULT 'pending',
+  status STRING,
   validation_message STRING,
 
   -- Audit fields
