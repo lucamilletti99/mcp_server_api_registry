@@ -226,6 +226,38 @@ export function PromptsPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="container mx-auto py-8">
           <h1 className={`text-3xl font-bold mb-8 ${isDark ? "text-white" : "text-gray-900"}`}>MCP Discovery</h1>
+      
+      {/* MCP Tools Section */}
+      <div className="mb-12">
+        <h2 className={`text-2xl font-semibold mb-4 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
+          <Wrench className={`h-6 w-6 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
+          MCP Tools
+        </h2>
+
+        {mcpTools.length === 0 ? (
+          <div className={`text-center mb-8 ${isDark ? "text-white/60" : "text-gray-600"}`}>
+            No MCP tools found.
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
+            {mcpTools.map((tool) => (
+              <Card key={tool.name}>
+                <CardHeader>
+                  <CardTitle className="text-lg">{tool.name}</CardTitle>
+                  <CardDescription className="whitespace-pre-line">
+                    {tool.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Available as MCP tool
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* MCP Setup Instructions Section */}
       {mcpConfig && (
@@ -315,37 +347,6 @@ export function PromptsPage() {
         )}
       </div>
 
-      {/* MCP Tools Section */}
-      <div className="mb-12">
-        <h2 className={`text-2xl font-semibold mb-4 flex items-center gap-2 ${isDark ? "text-white" : "text-gray-900"}`}>
-          <Wrench className={`h-6 w-6 ${isDark ? "text-blue-400" : "text-blue-600"}`} />
-          MCP Tools
-        </h2>
-
-        {mcpTools.length === 0 ? (
-          <div className={`text-center mb-8 ${isDark ? "text-white/60" : "text-gray-600"}`}>
-            No MCP tools found.
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
-            {mcpTools.map((tool) => (
-              <Card key={tool.name}>
-                <CardHeader>
-                  <CardTitle className="text-lg">{tool.name}</CardTitle>
-                  <CardDescription className="whitespace-pre-line">
-                    {tool.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Available as MCP tool
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
         </div>
       </div>
     </div>
