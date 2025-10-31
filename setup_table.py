@@ -49,7 +49,16 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
             warehouse_id = warehouses[0].id
             print(f"✅ Using warehouse: {warehouses[0].name} ({warehouse_id})")
         else:
-            print("❌ No SQL warehouses found. Please create one or provide warehouse_id")
+            print("❌ No SQL warehouses found in your workspace")
+            print("\n📖 You need to create a SQL Warehouse to continue:")
+            print("   https://docs.databricks.com/en/compute/sql-warehouse/create.html")
+            print("\n💡 Quick steps:")
+            print("   1. Go to your Databricks workspace")
+            print("   2. Click 'SQL Warehouses' in the left sidebar")
+            print("   3. Click 'Create SQL Warehouse'")
+            print("   4. Choose 'Serverless' for best performance")
+            print("   5. Click 'Create'")
+            print("\n   Then run this script again.")
             sys.exit(1)
 
     # Read SQL template

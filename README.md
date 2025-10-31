@@ -19,7 +19,9 @@ This is a complete API discovery and management platform that runs on Databricks
 **Workspace Requirements:**
 - Databricks Apps enabled (Public Preview)
 - Foundation Model API with `databricks-claude-sonnet-4` endpoint
-- At least one SQL Warehouse
+- **At least one SQL Warehouse** (required for table operations and MCP tools)
+  - [How to create a SQL Warehouse](https://docs.databricks.com/en/compute/sql-warehouse/create.html)
+  - Serverless SQL Warehouses recommended for best performance
 - Unity Catalog with an accessible catalog.schema
 
 See [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md) for detailed workspace setup requirements and troubleshooting.
@@ -55,26 +57,72 @@ This will:
 
 **IMPORTANT: Make sure you completed step 1 (./setup.sh) before proceeding!**
 
-The app needs a table to store registered APIs. Use the provided script to create it:
+**Prerequisites for this step:**
+- ✅ You must have at least one SQL Warehouse created in your workspace
+- ✅ The warehouse must be running or available to start
+- 📖 [How to create a SQL Warehouse](https://docs.databricks.com/en/compute/sql-warehouse/create.html)
+
+The app needs a table to store registered APIs. You can create it using either method:
+
+**Option 1: Using the Python Script (Recommended)**
 
 ```bash
 # The script automatically loads your .env.local configuration
 uv run python setup_table.py your_catalog your_schema
 
+# Example with actual catalog/schema names
+uv run python setup_table.py lucam_ws_demo custom_mcp_server
+
 # Optional: specify a warehouse ID
 uv run python setup_table.py your_catalog your_schema --warehouse-id abc123
 ```
 
-The script will:
-- ✅ Automatically load `DATABRICKS_HOST` from `.env.local`
-- ✅ Auto-detect and use an available SQL warehouse
-- ✅ Create the `api_registry` table with proper schema
-- ✅ Verify the table was created successfully
+**Option 2: Manually via Databricks SQL Editor**
+
+You can also run the SQL directly in Databricks:
+
+1. Open the [Databricks SQL Editor](https://docs.databricks.com/en/sql/user/queries/index.html) in your workspace
+2. Copy the contents of `setup_api_registry_table.sql`
+3. Replace `{catalog}` with your catalog name (e.g., `lucam_ws_demo`)
+4. Replace `{schema}` with your schema name (e.g., `custom_mcp_server`)
+5. Run the query
+
+```sql
+-- Example SQL (replace placeholders):
+CREATE TABLE IF NOT EXISTS your_catalog.your_schema.api_registry (
+  api_id STRING NOT NULL,
+  api_name STRING NOT NULL,
+  description STRING,
+  api_endpoint STRING NOT NULL,
+  documentation_url STRING,
+  http_method STRING,
+  auth_type STRING,
+  token_info STRING,
+  request_params STRING,
+  status STRING,
+  validation_message STRING,
+  user_who_requested STRING,
+  created_at TIMESTAMP,
+  modified_date TIMESTAMP,
+  CONSTRAINT api_registry_pk PRIMARY KEY (api_id)
+)
+COMMENT 'Registry of external API endpoints for discovery and management'
+TBLPROPERTIES (
+  'delta.enableChangeDataFeed' = 'true'
+);
+```
+
+**What the Python script does:**
+- ✅ Automatically loads `DATABRICKS_HOST` from `.env.local`
+- ✅ Auto-detects and uses an available SQL warehouse
+- ✅ Creates the `api_registry` table with proper schema
+- ✅ Verifies the table was created successfully
 
 **Troubleshooting:**
-- If you get "DATABRICKS_HOST not set", run `./setup.sh` first
-- If you don't have a SQL warehouse, create one in your Databricks workspace
-- You can also manually run the SQL from `setup_api_registry_table.sql` in Databricks UI
+- **"DATABRICKS_HOST not set"** → Run `./setup.sh` first
+- **"No SQL warehouses found"** → Create one using [this guide](https://docs.databricks.com/en/compute/sql-warehouse/create.html)
+- **"Permission denied"** → Ensure you have `CAN_USE` permission on the warehouse
+- You can also manually run the SQL from `setup_api_registry_table.sql` in Databricks SQL Editor
 
 ### 3. Deploy to Databricks
 

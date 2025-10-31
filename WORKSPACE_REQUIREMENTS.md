@@ -73,6 +73,33 @@ databricks warehouses list
 SELECT * FROM system.compute.warehouses;
 ```
 
+**How to create a SQL Warehouse:**
+
+If you don't have a SQL Warehouse, follow these steps:
+
+1. **Via Databricks UI** (Recommended):
+   - Go to your Databricks workspace
+   - Click **SQL Warehouses** in the left sidebar
+   - Click **Create SQL Warehouse**
+   - Configure settings:
+     - **Name**: Choose a descriptive name (e.g., "API Registry Warehouse")
+     - **Type**: Select **Serverless** for best performance (recommended)
+     - **Size**: Start with **2X-Small** (can scale up later)
+   - Click **Create**
+   - Wait for the warehouse to start (takes 1-2 minutes)
+
+2. **Via Databricks CLI**:
+   ```bash
+   databricks warehouses create \
+     --name "API Registry Warehouse" \
+     --cluster-size "2X-SMALL" \
+     --enable-serverless-compute
+   ```
+
+3. **Documentation**:
+   - [Creating a SQL Warehouse](https://docs.databricks.com/en/compute/sql-warehouse/create.html)
+   - [Serverless SQL Warehouses](https://docs.databricks.com/en/compute/sql-warehouse/serverless.html)
+
 **Required OAuth Scope:**
 - `sql` - Enables SQL warehouse and query execution
 
@@ -82,8 +109,9 @@ SELECT * FROM system.compute.warehouses;
 - Warehouse must have access to the catalog.schema where `api_registry` table is stored
 
 **Recommended:**
-- Serverless SQL Warehouse for best performance
+- **Serverless SQL Warehouse** for best performance and auto-scaling
 - Set `DATABRICKS_SQL_WAREHOUSE_ID` in `.env.local` for default warehouse
+- Enable auto-stop to save costs when not in use
 
 ---
 
