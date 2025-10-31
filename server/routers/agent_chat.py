@@ -228,30 +228,33 @@ async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any], request: R
     from fastmcp.server.http import _current_http_request
 
     try:
-        # Set up FastMCP context for tool execution with OBO authentication
-        # This allows tools to access the user's token via get_http_headers()
+        # Import the context variable from tools module
+        from server.tools import _user_token_context
+
+        # Set up FastMCP context for tool execution
         context = Context(mcp)
         context_token = _current_context.set(context)
 
-        # Also set the HTTP request context if available
-        # This propagates the x-forwarded-access-token header to tools
-        http_token = None
+        # Set user token in context variable for tool access
+        user_token_var = None
         if request:
             user_token = request.headers.get('x-forwarded-access-token')
             if user_token:
-                print(f'🔐 [Tool Execution] Propagating OBO token to tool: {tool_name}')
+                print(f'🔐 [Tool Execution] Injecting OBO token for tool: {tool_name}')
+                print(f'    Token preview: {user_token[:20]}...')
+                # Set the token in the context variable that tools can access
+                user_token_var = _user_token_context.set(user_token)
             else:
                 print(f'⚠️  [Tool Execution] No OBO token available for tool: {tool_name}')
-            http_token = _current_http_request.set(request)
 
         try:
-            # Execute the tool with proper context set
+            # Execute the tool with token available in context
             result = await mcp._tool_manager.call_tool(tool_name, tool_args)
         finally:
             # Always reset contexts
             _current_context.reset(context_token)
-            if http_token:
-                _current_http_request.reset(http_token)
+            if user_token_var:
+                _user_token_context.reset(user_token_var)
 
         # Convert ToolResult to string
         if hasattr(result, 'model_dump'):

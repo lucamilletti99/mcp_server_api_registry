@@ -12,6 +12,11 @@ import requests
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from fastmcp.server.dependencies import get_http_headers
+from contextvars import ContextVar
+
+# Context variable to store user token for OBO authentication
+# This is set by execute_mcp_tool() before calling tools
+_user_token_context: ContextVar[str | None] = ContextVar('user_token', default=None)
 
 
 def get_workspace_client() -> WorkspaceClient:
@@ -26,9 +31,20 @@ def get_workspace_client() -> WorkspaceClient:
   """
   host = os.environ.get('DATABRICKS_HOST')
 
-  # Try to get user token from request headers (on-behalf-of authentication)
-  headers = get_http_headers()
-  user_token = headers.get('x-forwarded-access-token')
+  # Try to get user token from multiple sources (in order of preference)
+  # 1. First try the context variable (set by execute_mcp_tool)
+  user_token = _user_token_context.get()
+  if user_token:
+    print(f'[get_workspace_client] ✅ Got token from context variable')
+  else:
+    # 2. Fallback to request headers (for direct HTTP calls to tools)
+    headers = get_http_headers()
+    print(f'[get_workspace_client] Headers received: {list(headers.keys())}')
+    user_token = headers.get('x-forwarded-access-token')
+
+  print(f'[get_workspace_client] User token found: {bool(user_token)}')
+  if user_token:
+    print(f'[get_workspace_client] Token preview: {user_token[:20]}...')
 
   if user_token:
     # Try on-behalf-of authentication with user's token
