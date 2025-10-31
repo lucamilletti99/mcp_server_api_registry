@@ -629,7 +629,7 @@ export function ChatPageAgent({
             </SelectContent>
             </Select>
             {!tableValidation.exists && !tableValidation.checking && (
-              <div className="flex items-center gap-1 text-red-500" title={tableValidation.message || "No api_registry table exists in this schema"}>
+              <div className="flex items-center gap-1 text-red-500" title={`No api_registry table exists in ${selectedCatalogSchema}. Switch to a catalog.schema with the api_registry table, or create the api_registry table in this schema.`}>
                 <AlertCircle className="h-4 w-4" />
                 <span className="text-xs">No table</span>
               </div>
