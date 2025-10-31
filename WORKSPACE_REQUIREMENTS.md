@@ -30,7 +30,7 @@ databricks apps list
 
 **Status:** Generally Available
 
-The AI chat interface uses Databricks Foundation Model APIs, specifically the `databricks-claude-sonnet-4` endpoint.
+The AI chat interface uses Databricks Foundation Model APIs, specifically the default being the `databricks-claude-sonnet-4` endpoint.
 
 **How to verify:**
 ```bash
@@ -149,12 +149,22 @@ The app uses the Databricks SDK to interact with workspace resources.
 
 ## Authentication Requirements
 
-### For Deployment (Admin)
+**Deployment Model:** This app is deployed FROM your local machine TO Databricks Apps using the Databricks CLI. You do not deploy from within Databricks.
 
-To deploy the app, you need:
-- Databricks CLI v0.260.0 or higher
-- `DATABRICKS_HOST` configured
-- Personal Access Token or OAuth authentication
+### For Deployment (Admin - from Local Machine)
+
+To deploy the app from your local machine, you need:
+- **Databricks CLI v0.260.0 or higher** installed locally
+  ```bash
+  # Install CLI on your local machine
+  curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+  ```
+- `DATABRICKS_HOST` configured in `.env.local` or via CLI
+- Personal Access Token or OAuth authentication configured locally
+  ```bash
+  # Authenticate from your local machine
+  databricks auth login --host https://your-workspace.cloud.databricks.com
+  ```
 - Permission to create Databricks Apps in the workspace
 
 ### For End Users
@@ -239,14 +249,47 @@ Verify your region supports `databricks-claude-sonnet-4` at: https://docs.databr
 
 ## Pre-Deployment Checklist
 
-Before deploying, verify:
+**Important:** This app is deployed FROM your local machine TO Databricks Apps. You do NOT deploy from within Databricks notebooks or workspace.
+
+### Local Machine Requirements
+
+Before deploying, verify on your LOCAL machine:
+
+- [ ] **Databricks CLI v0.260.0+** installed locally
+  ```bash
+  # Install if needed (macOS/Linux)
+  curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+  # Verify version
+  databricks version  # Must be >= 0.260.0
+  ```
+
+- [ ] **Python 3.12+** with `uv` package manager
+  ```bash
+  # Install uv if needed
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+  # Verify
+  python --version
+  uv --version
+  ```
+
+- [ ] **Authenticated to Databricks** from your local machine
+  ```bash
+  databricks auth login --host https://your-workspace.cloud.databricks.com
+
+  # Verify
+  databricks current-user me
+  ```
+
+### Workspace Requirements
+
+Verify in your Databricks workspace:
 
 - [ ] Databricks Apps is enabled in your workspace
 - [ ] At least one SQL warehouse is available
 - [ ] Unity Catalog is set up with an accessible catalog.schema
 - [ ] Foundation Model API endpoint `databricks-claude-sonnet-4` is accessible
-- [ ] You have Databricks CLI v0.260.0+ installed
-- [ ] You are authenticated to Databricks (`databricks current-user me`)
 - [ ] You have permissions to create Databricks Apps
 
 ---

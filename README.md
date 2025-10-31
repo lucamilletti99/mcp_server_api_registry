@@ -31,7 +31,10 @@ See [WORKSPACE_REQUIREMENTS.md](WORKSPACE_REQUIREMENTS.md) for detailed workspac
 
 ### 1. Clone and Setup
 
+**Note:** All deployment commands run on your LOCAL machine, not in Databricks.
+
 ```bash
+# On your local machine (not in Databricks):
 git clone https://github.com/YOUR-USERNAME/mcp_server_api_registry.git
 cd mcp_server_api_registry
 
@@ -40,10 +43,10 @@ cd mcp_server_api_registry
 ```
 
 This will:
-- Install `uv` if not present
-- Configure Databricks authentication
-- Install all dependencies
-- Create `.env.local` configuration
+- Install `uv` if not present (on your local machine)
+- Configure Databricks CLI authentication
+- Install all Python dependencies locally
+- Create `.env.local` configuration file
 
 ### 2. Create the API Registry Table
 
@@ -76,9 +79,18 @@ uv run python setup_table.py your_catalog your_schema
 
 ### 3. Deploy to Databricks
 
+Deploy from your local machine to Databricks Apps:
+
 ```bash
+# Run from your local machine (requires Databricks CLI authentication)
 ./deploy.sh
 ```
+
+This script will:
+- Build the frontend
+- Package the Python backend
+- Upload everything to your Databricks workspace
+- Deploy as a Databricks App
 
 Your app will be available at: `https://your-app.databricksapps.com`
 
