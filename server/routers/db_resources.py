@@ -5,17 +5,19 @@ from typing import Any, Dict, List
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
-from fastapi import APIRouter, HTTPException
-from fastmcp.server.dependencies import get_http_headers
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 router = APIRouter()
 
 
-def get_workspace_client() -> WorkspaceClient:
+def get_workspace_client(request: Request) -> WorkspaceClient:
     """Get a WorkspaceClient with on-behalf-of user authentication.
 
     Falls back to OAuth service principal authentication if user token is not available.
+
+    Args:
+        request: FastAPI Request object to extract user token from
 
     Returns:
         WorkspaceClient configured with appropriate authentication
@@ -23,15 +25,16 @@ def get_workspace_client() -> WorkspaceClient:
     host = os.environ.get('DATABRICKS_HOST')
 
     # Try to get user token from request headers (on-behalf-of authentication)
-    headers = get_http_headers()
-    user_token = headers.get('x-forwarded-access-token')
+    user_token = request.headers.get('x-forwarded-access-token')
 
     if user_token:
         # Use on-behalf-of authentication with user's token
+        print(f"🔐 Using OBO authentication for user")
         config = Config(host=host, token=user_token, auth_type='pat')
         return WorkspaceClient(config=config)
     else:
         # Fall back to OAuth service principal authentication
+        print(f"⚠️  No user token found, falling back to service principal")
         return WorkspaceClient(host=host)
 
 
@@ -70,14 +73,14 @@ class CatalogSchema(BaseModel):
 
 
 @router.get('/warehouses')
-async def list_warehouses() -> Dict[str, Any]:
+async def list_warehouses(request: Request) -> Dict[str, Any]:
     """List all SQL warehouses in the Databricks workspace.
 
     Returns:
         Dictionary with list of warehouses and their details
     """
     try:
-        w = get_workspace_client()
+        w = get_workspace_client(request)
 
         warehouses = []
         for warehouse in w.warehouses.list():
@@ -98,14 +101,14 @@ async def list_warehouses() -> Dict[str, Any]:
 
 
 @router.get('/catalogs')
-async def list_catalogs() -> Dict[str, Any]:
+async def list_catalogs(request: Request) -> Dict[str, Any]:
     """List all catalogs in the Databricks workspace.
 
     Returns:
         Dictionary with list of catalogs
     """
     try:
-        w = get_workspace_client()
+        w = get_workspace_client(request)
 
         catalogs = []
         for catalog in w.catalogs.list():
@@ -123,7 +126,7 @@ async def list_catalogs() -> Dict[str, Any]:
 
 
 @router.get('/schemas/{catalog_name}')
-async def list_schemas(catalog_name: str) -> Dict[str, Any]:
+async def list_schemas(catalog_name: str, request: Request) -> Dict[str, Any]:
     """List all schemas in a specific catalog.
 
     Args:
@@ -133,7 +136,7 @@ async def list_schemas(catalog_name: str) -> Dict[str, Any]:
         Dictionary with list of schemas in the catalog
     """
     try:
-        w = get_workspace_client()
+        w = get_workspace_client(request)
 
         schemas = []
         for schema in w.schemas.list(catalog_name=catalog_name):
@@ -152,7 +155,7 @@ async def list_schemas(catalog_name: str) -> Dict[str, Any]:
 
 
 @router.get('/catalog-schemas')
-async def list_all_catalog_schemas() -> Dict[str, Any]:
+async def list_all_catalog_schemas(request: Request) -> Dict[str, Any]:
     """List all catalog.schema combinations available in the workspace.
 
     This is useful for populating a dropdown that shows catalog_name.schema_name format.
@@ -161,7 +164,7 @@ async def list_all_catalog_schemas() -> Dict[str, Any]:
         Dictionary with list of all catalog.schema combinations
     """
     try:
-        w = get_workspace_client()
+        w = get_workspace_client(request)
 
         catalog_schemas = []
 
@@ -192,7 +195,7 @@ async def list_all_catalog_schemas() -> Dict[str, Any]:
 
 
 @router.get('/validate-api-registry-table')
-async def validate_api_registry_table(catalog: str, schema: str, warehouse_id: str) -> Dict[str, Any]:
+async def validate_api_registry_table(catalog: str, schema: str, warehouse_id: str, request: Request) -> Dict[str, Any]:
     """Validate if api_registry table exists in the specified catalog.schema.
 
     Args:
@@ -207,7 +210,7 @@ async def validate_api_registry_table(catalog: str, schema: str, warehouse_id: s
         from databricks.sdk.service.sql import StatementState
         import time
 
-        w = get_workspace_client()
+        w = get_workspace_client(request)
 
         # Build table name
         table_name = f'{catalog}.{schema}.api_registry'

@@ -50,10 +50,12 @@ def get_workspace_client(request: Request = None) -> WorkspaceClient:
 
     if user_token:
         # Use on-behalf-of authentication with user's token
+        print(f"🔐 Using OBO authentication for user")
         config = Config(host=host, token=user_token, auth_type='pat')
         return WorkspaceClient(config=config)
     else:
         # Fall back to OAuth service principal authentication
+        print(f"⚠️  No user token found, falling back to service principal")
         return WorkspaceClient(host=host)
 
 
