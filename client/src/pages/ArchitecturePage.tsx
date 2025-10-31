@@ -117,14 +117,14 @@ export function ArchitecturePage() {
       title: 'MCP Server',
       icon: <Network className="h-10 w-10" />,
       front: 'Model Context Protocol for AI tools',
-      back: 'Custom MCP server that exposes specialized tools for API discovery, registration, and management. Enables Claude and other AI assistants to interact with the API registry through standardized protocols.',
+      back: 'Custom MCP server that exposes specialized tools for API discovery, registration, and management. Enables AI assistants to interact with the API registry through standardized protocols, providing tools for validation, querying, and endpoint management.',
       color: 'purple',
     },
     {
-      title: 'Claude Sonnet 4',
+      title: 'Databricks Foundation Models',
       icon: <MessageSquare className="h-10 w-10" />,
-      front: 'Large language model for natural conversations',
-      back: 'Anthropic\'s Claude Sonnet 4 model accessed via Databricks Model Serving. Processes natural language requests, executes MCP tools, and provides intelligent responses about API discovery and management.',
+      front: 'State-of-the-art LLMs for natural conversations',
+      back: 'Databricks Foundation Model APIs provide access to leading LLMs including Claude, Llama, DBRX, and others via Model Serving. Processes natural language requests, executes MCP tools, and provides intelligent responses about API discovery and management.',
       color: 'red',
     },
     {
@@ -185,56 +185,76 @@ export function ArchitecturePage() {
       {/* Architecture Diagram */}
       <div className="max-w-7xl mx-auto p-8">
         {/* Presentation Layer */}
-        <div className="mb-12">
-          <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${
+        <div className="mb-8 relative">
+          <h2 className={`text-xl font-semibold mb-6 text-center flex items-center justify-center gap-2 ${
             isDark ? 'text-white' : 'text-gray-900'
           }`}>
             <Layers className="h-5 w-5" />
             Presentation Layer
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <ComponentCard {...components[0]} />
+          <div className="flex justify-center">
+            <div className="w-full max-w-md">
+              <ComponentCard {...components[0]} />
+            </div>
+          </div>
+          {/* Connecting line down */}
+          <div className="flex justify-center mt-6">
+            <div className={`w-0.5 h-12 ${isDark ? 'bg-white/20' : 'bg-gray-300'}`}>
+              <div className={`w-3 h-3 rounded-full -ml-1.5 ${isDark ? 'bg-white/40' : 'bg-gray-400'} absolute`} style={{ top: '100%' }} />
+            </div>
           </div>
         </div>
 
         {/* Application Layer */}
-        <div className="mb-12">
-          <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${
+        <div className="mb-8 relative">
+          <h2 className={`text-xl font-semibold mb-6 text-center flex items-center justify-center gap-2 ${
             isDark ? 'text-white' : 'text-gray-900'
           }`}>
             <Server className="h-5 w-5" />
             Application Layer
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <ComponentCard {...components[1]} />
             <ComponentCard {...components[2]} />
             <ComponentCard {...components[8]} />
           </div>
+          {/* Connecting lines down */}
+          <div className="flex justify-center mt-6 relative">
+            <div className={`w-0.5 h-12 ${isDark ? 'bg-white/20' : 'bg-gray-300'}`}>
+              <div className={`w-3 h-3 rounded-full -ml-1.5 ${isDark ? 'bg-white/40' : 'bg-gray-400'} absolute`} style={{ top: '100%' }} />
+            </div>
+          </div>
         </div>
 
         {/* AI & Compute Layer */}
-        <div className="mb-12">
-          <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${
+        <div className="mb-8 relative">
+          <h2 className={`text-xl font-semibold mb-6 text-center flex items-center justify-center gap-2 ${
             isDark ? 'text-white' : 'text-gray-900'
           }`}>
             <MessageSquare className="h-5 w-5" />
             AI & Compute Layer
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             <ComponentCard {...components[3]} />
             <ComponentCard {...components[5]} />
+          </div>
+          {/* Connecting lines down */}
+          <div className="flex justify-center mt-6 relative">
+            <div className={`w-0.5 h-12 ${isDark ? 'bg-white/20' : 'bg-gray-300'}`}>
+              <div className={`w-3 h-3 rounded-full -ml-1.5 ${isDark ? 'bg-white/40' : 'bg-gray-400'} absolute`} style={{ top: '100%' }} />
+            </div>
           </div>
         </div>
 
         {/* Data & Infrastructure Layer */}
-        <div className="mb-12">
-          <h2 className={`text-xl font-semibold mb-4 flex items-center gap-2 ${
+        <div className="mb-12 relative">
+          <h2 className={`text-xl font-semibold mb-6 text-center flex items-center justify-center gap-2 ${
             isDark ? 'text-white' : 'text-gray-900'
           }`}>
             <Database className="h-5 w-5" />
             Data & Infrastructure Layer
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             <ComponentCard {...components[4]} />
             <ComponentCard {...components[7]} />
             <ComponentCard {...components[6]} />
@@ -264,7 +284,7 @@ export function ArchitecturePage() {
                 2
               </span>
               <p>
-                <strong>Backend Processing:</strong> FastAPI receives requests and routes them appropriately. For AI chat, it forwards messages to Claude Sonnet 4 with available MCP tools. For direct API operations, it queries Unity Catalog via SQL Warehouse.
+                <strong>Backend Processing:</strong> FastAPI receives requests and routes them appropriately. For AI chat, it forwards messages to Databricks Foundation Models with available MCP tools. For direct API operations, it queries Unity Catalog via SQL Warehouse.
               </p>
             </div>
             <div className="flex items-start gap-3">
@@ -272,7 +292,7 @@ export function ArchitecturePage() {
                 3
               </span>
               <p>
-                <strong>AI Decision Making:</strong> Claude Sonnet 4 analyzes the user's request and decides which MCP tools to invoke. The MCP server exposes specialized tools for API discovery, registration, validation, and querying the registry.
+                <strong>AI Decision Making:</strong> Databricks Foundation Models (Claude, Llama, DBRX, etc.) analyze the user's request and decide which MCP tools to invoke. The MCP server exposes specialized tools for API discovery, registration, validation, and querying the registry.
               </p>
             </div>
             <div className="flex items-start gap-3">
@@ -288,7 +308,7 @@ export function ArchitecturePage() {
                 5
               </span>
               <p>
-                <strong>Response & Display:</strong> Results flow back through the layers: Unity Catalog → SQL Warehouse → MCP Tools → Claude → FastAPI → React UI. Users see natural language responses with actionable insights about their APIs.
+                <strong>Response & Display:</strong> Results flow back through the layers: Unity Catalog → SQL Warehouse → MCP Tools → Foundation Models → FastAPI → React UI. Users see natural language responses with actionable insights about their APIs.
               </p>
             </div>
           </div>
