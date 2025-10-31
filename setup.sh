@@ -152,13 +152,38 @@ if [ "$skip_env" != "true" ]; then
         
         # Update auth type in .env.local
         update_env_value "DATABRICKS_AUTH_TYPE" "pat" "Databricks Authentication Type"
-        
-        if [ -z "$DATABRICKS_HOST" ]; then
-            prompt_with_default "Databricks Host" "https://your-workspace.cloud.databricks.com" "DATABRICKS_HOST"
-        else
-            prompt_with_default "Databricks Host" "$DATABRICKS_HOST" "DATABRICKS_HOST"
+
+        # Try to auto-detect workspace from current authentication
+        DETECTED_HOST=""
+        if databricks current-user me --output json >/dev/null 2>&1; then
+            DETECTED_HOST=$(databricks current-user me --output json 2>/dev/null | grep -o '"workspaceUrl":"https://[^"]*"' | cut -d'"' -f4)
+            if [ -z "$DETECTED_HOST" ]; then
+                # Try alternative method using workspace command
+                DETECTED_HOST=$(databricks workspace current --output json 2>/dev/null | grep -o '"host":"https://[^"]*"' | cut -d'"' -f4)
+            fi
         fi
-        
+
+        # Use detected host as default, or fall back to existing/placeholder
+        if [ -n "$DETECTED_HOST" ]; then
+            DEFAULT_HOST="$DETECTED_HOST"
+            echo "✅ Auto-detected workspace: $DETECTED_HOST"
+
+            # Warn if detected workspace differs from stored
+            if [ -n "$DATABRICKS_HOST" ] && [ "$DATABRICKS_HOST" != "$DETECTED_HOST" ]; then
+                echo ""
+                echo "⚠️  Warning: Detected workspace differs from stored configuration"
+                echo "   Stored:   $DATABRICKS_HOST"
+                echo "   Detected: $DETECTED_HOST"
+                echo ""
+            fi
+        elif [ -n "$DATABRICKS_HOST" ]; then
+            DEFAULT_HOST="$DATABRICKS_HOST"
+        else
+            DEFAULT_HOST="https://your-workspace.cloud.databricks.com"
+        fi
+
+        prompt_with_default "Databricks Host" "$DEFAULT_HOST" "DATABRICKS_HOST"
+
         # Update host in .env.local
         update_env_value "DATABRICKS_HOST" "$DATABRICKS_HOST" "Databricks Configuration (PAT mode)"
         
