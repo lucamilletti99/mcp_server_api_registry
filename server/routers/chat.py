@@ -219,27 +219,26 @@ async def get_mcp_tools() -> List[Dict[str, Any]]:
 
     openai_tools = []
 
-    # Get tools dynamically from FastMCP
-    if hasattr(mcp, '_tool_manager'):
-        mcp_tools = await mcp._tool_manager.list_tools()
+    # Get tools dynamically from FastMCP using public API
+    mcp_tools = await mcp.get_tools()
 
-        # Convert to OpenAI format
-        for tool in mcp_tools:
-            # For now, use basic schema without full parameter definitions
-            # The model will infer parameters from the description
-            openai_tool = {
-                'type': 'function',
-                'function': {
-                    'name': tool.key,
-                    'description': tool.description or f'{tool.key.replace("_", " ").title()}',
-                    'parameters': {
-                        'type': 'object',
-                        'properties': {},
-                        'required': [],
-                    },
+    # Convert to OpenAI format
+    for tool in mcp_tools:
+        # For now, use basic schema without full parameter definitions
+        # The model will infer parameters from the description
+        openai_tool = {
+            'type': 'function',
+            'function': {
+                'name': tool.key,
+                'description': tool.description or f'{tool.key.replace("_", " ").title()}',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {},
+                    'required': [],
                 },
-            }
-            openai_tools.append(openai_tool)
+            },
+        }
+        openai_tools.append(openai_tool)
 
     return openai_tools
 

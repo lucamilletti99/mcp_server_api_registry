@@ -100,32 +100,29 @@ async def load_mcp_tools_cached(force_reload: bool = False) -> List[Dict[str, An
     # Import the MCP server instance from the app
     from server.app import mcp_server as mcp
 
-    # Get tools directly from the MCP server instance (no HTTP!)
-    if hasattr(mcp, '_tool_manager'):
-        mcp_tools = await mcp._tool_manager.list_tools()
+    # Get tools directly from the MCP server instance using public API
+    mcp_tools = await mcp.get_tools()
 
-        # Convert to OpenAI format
-        openai_tools = []
-        for tool in mcp_tools:
-            openai_tool = {
-                "type": "function",
-                "function": {
-                    "name": tool.key,
-                    "description": tool.description or tool.key,
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
+    # Convert to OpenAI format
+    openai_tools = []
+    for tool in mcp_tools:
+        openai_tool = {
+            "type": "function",
+            "function": {
+                "name": tool.key,
+                "description": tool.description or tool.key,
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
                 }
             }
-            openai_tools.append(openai_tool)
+        }
+        openai_tools.append(openai_tool)
 
-        # Cache the tools
-        _tools_cache = openai_tools
-        return openai_tools
-
-    return []
+    # Cache the tools
+    _tools_cache = openai_tools
+    return openai_tools
 
 
 async def call_foundation_model(
@@ -227,34 +224,33 @@ async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any]) -> str:
     from server.app import mcp_server as mcp
 
     try:
-        # Execute the tool directly (no HTTP!)
-        if hasattr(mcp, '_tool_manager'):
-            result = await mcp._tool_manager.call_tool(tool_name, tool_args)
+        # Execute the tool directly using the tool manager's call_tool method
+        result = await mcp._tool_manager.call_tool(tool_name, tool_args)
 
-            # Convert ToolResult to string
-            if hasattr(result, 'model_dump'):
-                result_dict = result.model_dump()
-                if 'content' in result_dict:
-                    content_list = result_dict['content']
-                    if isinstance(content_list, list) and len(content_list) > 0:
-                        first_content = content_list[0]
-                        if isinstance(first_content, dict) and 'text' in first_content:
-                            return first_content['text']
-                return json.dumps(result_dict)
-            elif hasattr(result, 'content'):
-                # FastMCP ToolResult
-                content_parts = []
-                for content in result.content:
-                    if hasattr(content, 'text'):
-                        content_parts.append(content.text)
-                return "".join(content_parts)
-            else:
-                return str(result)
+        # Convert ToolResult to string
+        if hasattr(result, 'model_dump'):
+            result_dict = result.model_dump()
+            if 'content' in result_dict:
+                content_list = result_dict['content']
+                if isinstance(content_list, list) and len(content_list) > 0:
+                    first_content = content_list[0]
+                    if isinstance(first_content, dict) and 'text' in first_content:
+                        return first_content['text']
+            return json.dumps(result_dict)
+        elif hasattr(result, 'content'):
+            # FastMCP ToolResult
+            content_parts = []
+            for content in result.content:
+                if hasattr(content, 'text'):
+                    content_parts.append(content.text)
+            return "".join(content_parts)
+        else:
+            return str(result)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return f"Error executing tool {tool_name}: {str(e)}"
-
-    return f"Tool {tool_name} not found"
 
 
 async def run_agent_loop(

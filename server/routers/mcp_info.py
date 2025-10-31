@@ -56,24 +56,22 @@ async def get_mcp_discovery() -> Dict[str, Any]:
   prompts_list = []
   tools_list = []
 
-  # Get prompts dynamically from FastMCP
-  if hasattr(mcp, '_prompt_manager'):
-    prompts = await mcp._prompt_manager.list_prompts()
-    prompts_list = [
-      {
-        'name': prompt.key,
-        'description': prompt.description or f'{prompt.key.replace("_", " ").title()}',
-      }
-      for prompt in prompts
-    ]
+  # Get prompts dynamically from FastMCP using public API
+  prompts = await mcp.get_prompts()
+  prompts_list = [
+    {
+      'name': prompt.key,
+      'description': prompt.description or f'{prompt.key.replace("_", " ").title()}',
+    }
+    for prompt in prompts
+  ]
 
-  # Get tools dynamically from FastMCP
-  if hasattr(mcp, '_tool_manager'):
-    tools = await mcp._tool_manager.list_tools()
-    tools_list = [
-      {'name': tool.key, 'description': tool.description or f'{tool.key.replace("_", " ").title()}'}
-      for tool in tools
-    ]
+  # Get tools dynamically from FastMCP using public API
+  tools = await mcp.get_tools()
+  tools_list = [
+    {'name': tool.key, 'description': tool.description or f'{tool.key.replace("_", " ").title()}'}
+    for tool in tools
+  ]
 
   return {'prompts': prompts_list, 'tools': tools_list, 'servername': servername}
 
