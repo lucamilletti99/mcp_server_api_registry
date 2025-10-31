@@ -3,7 +3,8 @@ import { ChatPageAgent } from "./pages/ChatPageAgent";
 import { PromptsPage } from "./pages/PromptsPage";
 import { TracesPage } from "./pages/TracesPage";
 import { RegistryPage } from "./pages/RegistryPage";
-import { MessageSquare, FileCode, Moon, Sun, Activity, Database } from "lucide-react";
+import { ArchitecturePage } from "./pages/ArchitecturePage";
+import { MessageSquare, FileCode, Moon, Sun, Activity, Database, Layers } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -97,6 +98,21 @@ function App() {
             <Database className="h-4 w-4" />
             API Registry
           </button>
+          <button
+            onClick={() => setActiveTab("architecture")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              activeTab === "architecture"
+                ? isDark
+                  ? "bg-white/10 text-white"
+                  : "bg-gray-100 text-gray-900"
+                : isDark
+                ? "text-white/60 hover:text-white/80 hover:bg-white/5"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+            }`}
+          >
+            <Layers className="h-4 w-4" />
+            Architecture
+          </button>
         </div>
 
         {/* Theme Selector */}
@@ -147,6 +163,9 @@ function App() {
             selectedWarehouse={selectedWarehouse}
             selectedCatalogSchema={selectedCatalogSchema}
           />
+        </div>
+        <div className={activeTab === "architecture" ? "h-full" : "hidden"}>
+          <ArchitecturePage />
         </div>
       </div>
     </div>
