@@ -211,22 +211,47 @@ async def call_foundation_model(
         return response.json()
 
 
-async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any]) -> str:
+async def execute_mcp_tool(tool_name: str, tool_args: Dict[str, Any], request: Request = None) -> str:
     """Execute a tool directly via MCP server instance.
 
     Args:
         tool_name: Name of the tool
         tool_args: Tool arguments
+        request: Optional FastAPI Request object for OBO authentication
 
     Returns:
         Tool result as string
     """
     # Import the MCP server instance from the app
     from server.app import mcp_server as mcp
+    from fastmcp.server.context import _current_context, Context
+    from fastmcp.server.http import _current_http_request
 
     try:
-        # Execute the tool directly using the tool manager's call_tool method
-        result = await mcp._tool_manager.call_tool(tool_name, tool_args)
+        # Set up FastMCP context for tool execution with OBO authentication
+        # This allows tools to access the user's token via get_http_headers()
+        context = Context(mcp)
+        context_token = _current_context.set(context)
+
+        # Also set the HTTP request context if available
+        # This propagates the x-forwarded-access-token header to tools
+        http_token = None
+        if request:
+            user_token = request.headers.get('x-forwarded-access-token')
+            if user_token:
+                print(f'🔐 [Tool Execution] Propagating OBO token to tool: {tool_name}')
+            else:
+                print(f'⚠️  [Tool Execution] No OBO token available for tool: {tool_name}')
+            http_token = _current_http_request.set(request)
+
+        try:
+            # Execute the tool with proper context set
+            result = await mcp._tool_manager.call_tool(tool_name, tool_args)
+        finally:
+            # Always reset contexts
+            _current_context.reset(context_token)
+            if http_token:
+                _current_http_request.reset(http_token)
 
         # Convert ToolResult to string
         if hasattr(result, 'model_dump'):
@@ -508,9 +533,9 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
                         span_type='TOOL'
                     )
 
-                # Execute via MCP
+                # Execute via MCP with user request context for OBO auth
                 tool_start_time = time.time()
-                result = await execute_mcp_tool(tool_name, tool_args)
+                result = await execute_mcp_tool(tool_name, tool_args, request)
                 tool_duration = time.time() - tool_start_time
 
                 if trace_id and tool_span_id:
@@ -570,9 +595,9 @@ You are helpful, efficient, and minimize user friction through intelligent tool 
                         span_type='TOOL'
                     )
 
-                # Execute via MCP
+                # Execute via MCP with user request context for OBO auth
                 tool_start_time = time.time()
-                result = await execute_mcp_tool(tool_name, tool_args)
+                result = await execute_mcp_tool(tool_name, tool_args, request)
                 tool_duration = time.time() - tool_start_time
 
                 if trace_id and tool_span_id:
