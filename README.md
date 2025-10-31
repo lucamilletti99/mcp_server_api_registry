@@ -50,32 +50,31 @@ This will:
 
 ### 2. Create the API Registry Table
 
-The app needs a table to store registered APIs. Run this SQL in your Databricks workspace:
+**IMPORTANT: Make sure you completed step 1 (./setup.sh) before proceeding!**
 
-```sql
-CREATE TABLE IF NOT EXISTS your_catalog.your_schema.api_registry (
-  api_id STRING NOT NULL,
-  api_name STRING NOT NULL,
-  description STRING,
-  api_endpoint STRING NOT NULL,
-  documentation_url STRING,
-  http_method STRING DEFAULT 'GET',
-  auth_type STRING DEFAULT 'none',
-  token_info STRING,
-  request_params STRING DEFAULT '{}',
-  status STRING DEFAULT 'pending',
-  validation_message STRING,
-  user_who_requested STRING,
-  created_at TIMESTAMP,
-  modified_date TIMESTAMP,
-  PRIMARY KEY (api_id)
-);
-```
+The app needs a table to store registered APIs. Use the provided script to create it:
 
-Or use the provided script:
 ```bash
+# The script automatically loads your .env.local configuration
 uv run python setup_table.py your_catalog your_schema
+
+# Example with actual catalog/schema names
+uv run python setup_table.py lucam_ws_demo custom_mcp_server
+
+# Optional: specify a warehouse ID
+uv run python setup_table.py lucam_ws_demo custom_mcp_server --warehouse-id abc123
 ```
+
+The script will:
+- ✅ Automatically load `DATABRICKS_HOST` from `.env.local`
+- ✅ Auto-detect and use an available SQL warehouse
+- ✅ Create the `api_registry` table with proper schema
+- ✅ Verify the table was created successfully
+
+**Troubleshooting:**
+- If you get "DATABRICKS_HOST not set", run `./setup.sh` first
+- If you don't have a SQL warehouse, create one in your Databricks workspace
+- You can also manually run the SQL from `setup_api_registry_table.sql` in Databricks UI
 
 ### 3. Deploy to Databricks
 

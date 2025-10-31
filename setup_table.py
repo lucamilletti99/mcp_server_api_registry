@@ -3,8 +3,19 @@
 
 import os
 import sys
+from pathlib import Path
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementState
+
+# Load environment variables from .env.local if it exists
+try:
+    from dotenv import load_dotenv
+    env_file = Path(__file__).parent / '.env.local'
+    if env_file.exists():
+        load_dotenv(env_file)
+        print(f"✅ Loaded environment from .env.local")
+except ImportError:
+    pass  # python-dotenv not required
 
 def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None):
     """Create the api_registry table in the specified catalog.schema.
@@ -18,6 +29,9 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
     host = os.environ.get('DATABRICKS_HOST')
     if not host:
         print("❌ DATABRICKS_HOST environment variable not set")
+        print("💡 Make sure you have run ./setup.sh to create .env.local")
+        print("💡 Or set DATABRICKS_HOST manually:")
+        print("   export DATABRICKS_HOST=https://your-workspace.cloud.databricks.com")
         sys.exit(1)
 
     print(f"🔐 Connecting to Databricks: {host}")
