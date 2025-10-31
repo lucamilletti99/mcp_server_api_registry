@@ -61,10 +61,29 @@ def setup_api_registry_table(catalog: str, schema: str, warehouse_id: str = None
     sql = sql_template.replace('{catalog}', catalog).replace('{schema}', schema)
 
     # Split into individual statements (simple split by semicolon)
-    statements = [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]
+    # Remove comment-only lines but keep comments within statements
+    raw_statements = sql.split(';')
+    statements = []
+    for s in raw_statements:
+        s_stripped = s.strip()
+        # Skip empty or comment-only statements
+        if not s_stripped:
+            continue
+        # Remove leading comment lines but keep the SQL
+        lines = [line for line in s_stripped.split('\n') if not line.strip().startswith('--')]
+        if lines:
+            statement = '\n'.join(lines).strip()
+            if statement:
+                statements.append(statement)
 
     print(f"\n📝 Creating api_registry table in {catalog}.{schema}...")
-    print(f"🔧 Using SQL warehouse: {warehouse_id}\n")
+    print(f"🔧 Using SQL warehouse: {warehouse_id}")
+    print(f"📄 Found {len(statements)} SQL statement(s) to execute\n")
+
+    if len(statements) == 0:
+        print("❌ No SQL statements found in setup_api_registry_table.sql")
+        print(f"   SQL file location: {sql_file}")
+        sys.exit(1)
 
     # Execute each statement
     for i, statement in enumerate(statements, 1):
