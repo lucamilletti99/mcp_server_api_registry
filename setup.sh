@@ -30,12 +30,17 @@ prompt_with_default() {
     local prompt="$1"
     local default="$2"
     local var_name="$3"
-    
+    local note="${4:-}"  # Optional note parameter
+
+    if [ -n "$note" ]; then
+        echo "   $note"
+    fi
+
     read -p "$prompt [$default]: " input
     if [ -z "$input" ]; then
         input="$default"
     fi
-    
+
     # Set the variable dynamically
     eval "$var_name='$input'"
 }
@@ -376,18 +381,22 @@ if [ "$skip_env" != "true" ]; then
     echo ""
     echo "🔧 MCP Server Configuration"
     echo "---------------------------"
-    
+
+    # Default server name to app name (makes sense to keep them aligned)
+    DEFAULT_SERVERNAME="$DATABRICKS_APP_NAME"
+
     # Load current servername from config.yaml if it exists
     CURRENT_SERVERNAME=""
     if [ -f "config.yaml" ]; then
         CURRENT_SERVERNAME=$(grep "servername:" config.yaml 2>/dev/null | cut -d':' -f2 | sed 's/^ *//' | sed 's/ *$//')
     fi
-    
+
+    # Use current servername if exists, otherwise use app name as default
     if [ -z "$CURRENT_SERVERNAME" ]; then
-        CURRENT_SERVERNAME="databricks-mcp"
+        CURRENT_SERVERNAME="$DEFAULT_SERVERNAME"
     fi
-    
-    prompt_with_default "MCP Server Name" "$CURRENT_SERVERNAME" "SERVERNAME"
+
+    prompt_with_default "MCP Server Name" "$CURRENT_SERVERNAME" "SERVERNAME" "💡 Press Enter to use default (same as app name)"
     
     # Create or update config.yaml
     echo "# MCP Server Configuration" > config.yaml
