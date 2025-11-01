@@ -56,6 +56,7 @@ export class RegistryService {
      * description: New description
      * api_endpoint: New endpoint URL
      * request: Request object for authentication
+     * documentation_url: Optional documentation URL
      *
      * Returns:
      * Success message
@@ -66,6 +67,7 @@ export class RegistryService {
      * @param apiName
      * @param description
      * @param apiEndpoint
+     * @param documentationUrl
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -77,6 +79,7 @@ export class RegistryService {
         apiName: string,
         description: string,
         apiEndpoint: string,
+        documentationUrl?: string,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
@@ -91,6 +94,7 @@ export class RegistryService {
                 'api_name': apiName,
                 'description': description,
                 'api_endpoint': apiEndpoint,
+                'documentation_url': documentationUrl,
             },
             errors: {
                 422: `Validation Error`,

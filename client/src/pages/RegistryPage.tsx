@@ -443,6 +443,11 @@ export function RegistryPage({ selectedWarehouse, selectedCatalogSchema }: Regis
                           <div>
                             <span className="font-medium">Auth:</span> {api.auth_type}
                           </div>
+                          {api.created_at && (
+                            <div className={isDark ? 'text-white/40' : 'text-gray-400'}>
+                              Created: {new Date(api.created_at).toLocaleDateString()}
+                            </div>
+                          )}
                           {api.last_validated && (
                             <div className={isDark ? 'text-white/40' : 'text-gray-400'}>
                               Last validated: {new Date(api.last_validated).toLocaleDateString()}

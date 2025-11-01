@@ -311,4 +311,16 @@ export class ApiService {
             url: '/api/health',
         });
     }
+    /**
+     * Get Auth Status
+     * Debug endpoint to show current authentication status.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getAuthStatusApiDebugAuthStatusGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/debug/auth-status',
+        });
+    }
 }

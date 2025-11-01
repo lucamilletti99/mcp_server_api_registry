@@ -877,8 +877,8 @@ def load_tools(mcp_server):
           config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token, auth_type='pat')
           w = WorkspaceClient(config=config)
           current_user = w.current_user.me()
-          # Extract username from email (e.g., luca.milletti@databricks.com -> luca.milletti)
-          username = current_user.user_name.split('@')[0] if current_user.user_name else 'unknown'
+          # Store full email (e.g., luca.milletti@databricks.com)
+          username = current_user.user_name if current_user.user_name else 'unknown'
         except Exception:
           username = 'unknown'
 
@@ -1163,8 +1163,8 @@ VALUES (
           config = Config(host=os.environ.get('DATABRICKS_HOST'), token=user_token, auth_type='pat')
           w = WorkspaceClient(config=config)
           current_user = w.current_user.me()
-          # Extract username from email (e.g., luca.milletti@databricks.com -> luca.milletti)
-          username = current_user.user_name.split('@')[0] if current_user.user_name else 'unknown'
+          # Store full email (e.g., luca.milletti@databricks.com)
+          username = current_user.user_name if current_user.user_name else 'unknown'
         except Exception:
           username = 'unknown'
 

@@ -27,6 +27,7 @@ export { AgentService } from './services/AgentService';
 export { ApiService } from './services/ApiService';
 export { ChatService } from './services/ChatService';
 export { DatabaseService } from './services/DatabaseService';
+export { DebugService } from './services/DebugService';
 export { HealthService } from './services/HealthService';
 export { McpService } from './services/McpService';
 export { PromptsService } from './services/PromptsService';

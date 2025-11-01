@@ -10,6 +10,7 @@ export type RegisteredAPI = {
     api_name: string;
     description?: (string | null);
     api_endpoint: string;
+    documentation_url?: (string | null);
     http_method?: string;
     auth_type?: string;
     status?: string;
