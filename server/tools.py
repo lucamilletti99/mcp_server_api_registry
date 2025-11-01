@@ -867,8 +867,12 @@ def load_tools(mcp_server):
     print(f'📝 Registering API in table: {table_name}')
     try:
       # Get authenticated user info for user_who_requested field
-      headers = get_http_headers()
-      user_token = headers.get('x-forwarded-access-token')
+      # Try to get user token from context variable first (set by agent_chat router)
+      user_token = _user_token_context.get()
+      if not user_token:
+        # Fallback to HTTP headers (for direct API calls)
+        headers = get_http_headers()
+        user_token = headers.get('x-forwarded-access-token')
 
       # Try to get username from authenticated user
       username = 'unknown'
@@ -1153,8 +1157,12 @@ VALUES (
       print(f'📝 Registering API in registry...')
 
       # Get authenticated user info for user_who_requested field
-      headers = get_http_headers()
-      user_token = headers.get('x-forwarded-access-token')
+      # Try to get user token from context variable first (set by agent_chat router)
+      user_token = _user_token_context.get()
+      if not user_token:
+        # Fallback to HTTP headers (for direct API calls)
+        headers = get_http_headers()
+        user_token = headers.get('x-forwarded-access-token')
 
       # Try to get username from authenticated user
       username = 'unknown'
